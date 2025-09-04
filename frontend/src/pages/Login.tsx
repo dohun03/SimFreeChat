@@ -12,32 +12,6 @@ export default function Login() {
 
   const [user, setUser] = useState<{ username: string } | null>(null);
 
-  // useEffect(() => {
-  //   async function getProfile() {
-  //     try {
-  //       const res = await fetch("http://localhost:4000/auth/me", {
-  //         method: "GET",
-  //         credentials: "include",
-  //       });
-
-  //       const data = await res.json();
-
-  //       console.log(data);
-
-  //       if (!res.ok) {
-  //         console.log(data.message || "로그인 실패");
-  //         return;
-  //       }
-
-  //       setUser(data);
-  //     } catch (err) {
-  //       console.error(err);
-  //     }
-  //   }
-
-  //   getProfile();
-  // }, []);
-
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 

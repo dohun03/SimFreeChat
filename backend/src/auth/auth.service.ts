@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Req, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Req, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -57,7 +57,14 @@ export class AuthService {
   }
 
   async getProfile(sessionId: string) {
-    const session = this.redisService.getSession(sessionId);
-    return session;
+    const session = await this.redisService.getSession(sessionId);
+
+    const user = await this.userRepository.findOne({ where: { id: session.userId } });
+
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+
+    const { password, ...safeUser } = user;
+
+    return safeUser;
   }
 }

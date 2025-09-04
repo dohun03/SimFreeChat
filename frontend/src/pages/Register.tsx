@@ -9,6 +9,7 @@ export default function Register() {
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);  
   const [message, setMessage] = useState<string>("");
   
   const usernameRegex = /^(?:[가-힣]{2,12}|[a-zA-Z0-9]{2,12})$/;
@@ -66,7 +67,6 @@ export default function Register() {
         <p className="text-gray-600 mb-6 text-sm">
           다양한 사람들과 즐겨보세요!
         </p>
-
         <form onSubmit={handleRegister} className="space-y-4">
           <input
             type="text"
@@ -76,7 +76,6 @@ export default function Register() {
             className="w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
-
           <input
             type="email"
             placeholder="이메일"
@@ -85,7 +84,6 @@ export default function Register() {
             className="w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           />
-
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
@@ -103,16 +101,22 @@ export default function Register() {
               {showPassword ? "숨기기" : "표시"}
             </button>
           </div>
-
           <div className="relative">
             <input
-              type={showPassword ? "text" : "password"}
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="비밀번호 확인"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute inset-y-0 right-3 flex items-center text-sm text-blue-600"
+            >
+              {showConfirmPassword ? "숨기기" : "표시"}
+            </button>
           </div>
 
           <button
