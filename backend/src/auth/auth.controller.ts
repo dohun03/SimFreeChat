@@ -19,9 +19,7 @@ export class AuthController {
       throw new BadRequestException('이미 로그인 되어있는 사용자입니다.');
     }
 
-    const { sessionId, user } = await this.authService.logIn(loginUserDto);
-
-    console.log('테스트2',sessionId, user);
+    const { sessionId, safeUser } = await this.authService.logIn(loginUserDto);
 
     res.cookie('SESSIONID', sessionId, {
       httpOnly: true,
@@ -29,7 +27,7 @@ export class AuthController {
       sameSite: 'lax'
     });
   
-    return user; // 자동으로 200 코드 반환.
+    return safeUser; // 자동으로 200 코드 반환.
   }
 
   @Post('logout')
@@ -47,10 +45,10 @@ export class AuthController {
     return res.json({ message: '로그아웃' });
   }
 
-  @Get('me')
-  async getProfile(@Req() req: any) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException();
-    return this.authService.getProfile(sessionId);
-  }
+  // @Get('me')
+  // async getProfile(@Req() req: any) {
+  //   const sessionId = req.cookies['SESSIONID'];
+  //   if (!sessionId) throw new UnauthorizedException();
+  //   return this.authService.getProfile(sessionId);
+  // }
 }

@@ -16,7 +16,7 @@ export class UsersService {
   ) {}
 
   //회원가입
-  async createUser(createUserDto: CreateUserDto): Promise<User> {
+  async createUser(createUserDto: CreateUserDto) {
     const { username, password, email } = createUserDto;
   
     const existingUser = await this.userRepository.findOne({ where: { username } });
@@ -34,9 +34,7 @@ export class UsersService {
     });
   
     try {
-      const savedUser = await this.userRepository.save(newUser);
-      console.log('DB 저장 완료:', savedUser);
-      return savedUser;
+      await this.userRepository.save(newUser);
     } catch (err) {
       console.error('DB 저장 중 에러 발생:', err);
       throw err;

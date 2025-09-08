@@ -96,24 +96,35 @@ export default function Profile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const usernameRegex = /^(?:[가-힣]{2,12}|[a-zA-Z0-9]{2,12})$/;
+    const passwordRegex = /^[a-zA-Z0-9!@#$%^&*(),.?":{}|<>]{4,16}$/;
+
     if (form.password !== form.confirmPassword) {
-      alert("비밀번호가 일치하지 않습니다.");
+      setMessage("비밀번호가 일치하지 않습니다");
       return;
     }
 
     const payload: Partial<typeof form> = {};
     if (form.username && form.username !== savedProfile.username) {
+      if (!usernameRegex.test(form.username)) {
+        setMessage("아이디는 한글(2~12자) 또는 영문/숫자 조합(2~12자)만 가능합니다.");
+        return;
+      }
       payload.username = form.username;
     }
     if (form.email && form.email !== savedProfile.email) {
       payload.email = form.email;
     }
     if (form.password) {
+      if (!passwordRegex.test(form.password)) {
+        setMessage("비밀번호는 4~16자의 영문 또는 숫자만 가능합니다.");
+        return;
+      }
       payload.password = form.password;
     }
 
     if (Object.keys(payload).length === 0) {
-      alert("변경된 내용이 없습니다.");
+      setMessage("변경된 내용이 없습니다.");
       return;
     }
 

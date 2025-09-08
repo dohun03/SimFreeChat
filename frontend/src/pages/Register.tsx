@@ -18,7 +18,6 @@ export default function Register() {
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    console.log('테스트',usernameRegex.test(username));
     if (!usernameRegex.test(username)) {
       setMessage("아이디는 한글(2~12자) 또는 영문/숫자 조합(2~12자)만 가능합니다.");
       return;
@@ -37,27 +36,24 @@ export default function Register() {
     try {
       const res = await fetch("http://localhost:4000/users/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, email }),
       });
-
+    
+      const data = await res.json(); // 한 번만 호출
+    
       if (!res.ok) {
-        const errorData = await res.json();
-        console.error(errorData);
-        setMessage(errorData.message || "기타 에러가 발생했습니다.");
+        console.error(data);
+        setMessage(data.message || "기타 에러가 발생했습니다.");
         return;
       }
-
-      const data = await res.json();
-      console.log(data);
+    
       setMessage("회원가입 성공!");
-      navigate("/login", { replace: true }); // 이전 페이지 못가는 옵션
+      navigate("/login", { replace: true });
     } catch (err) {
       console.error(err);
       setMessage("회원가입에 실패했습니다");
-    }
+    }    
   };
 
   return (

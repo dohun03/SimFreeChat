@@ -2,15 +2,22 @@ import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Settings from "./pages/settings/Profile"
+import Settings from "./pages/settings/Profile";
+import RoomsList from "./pages/rooms/RoomsList";
 import Header from "./components/Header";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import RoomForm from "./pages/rooms/RoomForm";
+import ChatRoom from "./pages/rooms/ChatRoom";
 
 function AppRoutes() {
   const { user } = useAuth();
 
   return (
     <Routes>
+      <Route path="/" element={<RoomsList />} />
+      <Route path="/rooms/:roomId" element={<ChatRoom />} />
+      <Route path="/rooms/new" element={<RoomForm/>}></Route>
+      <Route path="/rooms/:roomId/edit" element={<RoomForm/>}></Route>
       <Route
         path="/login"
         element={
@@ -52,8 +59,10 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Header />
-        <AppRoutes />
+        <div className="bg-gray-100 min-h-screen">
+          <Header />
+          <AppRoutes />
+        </div>
       </BrowserRouter>
     </AuthProvider>
   );

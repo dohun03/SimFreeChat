@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     async function getProfile() {
       try {
-        const res = await fetch("http://localhost:4000/auth/me", { credentials: "include" });
+        const res = await fetch("http://localhost:4000/users/me", { credentials: "include" });
         if (res.ok) {
           setUser(await res.json());
         } else {

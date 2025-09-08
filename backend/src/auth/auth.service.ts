@@ -43,7 +43,9 @@ export class AuthService {
         isBanned: user.is_banned 
     });
 
-    return { sessionId, user };
+    const { password: removed, ...safeUser } = user;
+
+    return { sessionId, safeUser };
   }
 
   // 로그아웃 로직
@@ -56,15 +58,15 @@ export class AuthService {
     await this.redisService.deleteSession(sessionId);
   }
 
-  async getProfile(sessionId: string) {
-    const session = await this.redisService.getSession(sessionId);
+  // async getProfile(sessionId: string) {
+  //   const session = await this.redisService.getSession(sessionId);
 
-    const user = await this.userRepository.findOne({ where: { id: session.userId } });
+  //   const user = await this.userRepository.findOne({ where: { id: session.userId } });
 
-    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+  //   if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
-    const { password, ...safeUser } = user;
+  //   const { password, ...safeUser } = user;
 
-    return safeUser;
-  }
+  //   return safeUser;
+  // }
 }

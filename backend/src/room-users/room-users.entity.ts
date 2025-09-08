@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, Unique, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, Unique, JoinColumn, } from 'typeorm';
 import { Room } from '../rooms/rooms.entity';
 import { User } from '../users/users.entity';
 
@@ -24,15 +24,15 @@ export class RoomUser {
   @Column({ type: 'enum', enum: Role, default: Role.MEMBER })
   role: Role;
 
-  @Column({ default: false })
-  is_banned: boolean;
+  @Column({ name: 'is_banned', default: false })
+  isBanned: boolean;
 
-  @Column({ default: false })
-  is_muted: boolean;
+  @Column({ name: 'is_muted', default: false })
+  isMuted: boolean;
 
-  @CreateDateColumn()
-  joined_at: Date;
+  @CreateDateColumn({ name: 'joined_at' })
+  joinedAt: Date;
 
-  @UpdateDateColumn()
-  updated_at: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

@@ -10,13 +10,14 @@ export class UsersController {
   @Post('register')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async createUser(@Body() createUserDto: CreateUserDto) { // 요청 본문(JSON)을 CreateUserDto 타입으로 매핑
-    return this.usersService.createUser(createUserDto);
+    await this.usersService.createUser(createUserDto);
+    return { message: "회원가입 성공"};
   }
 
   @Get('me')
   async getUserProfile(@Req() req: any) {
     const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException();
+    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     return this.usersService.getUserProfile(sessionId);
   }
@@ -28,8 +29,7 @@ export class UsersController {
     @Req() req: any
   ) {
     const sessionId = req.cookies['SESSIONID'];
-    console.log('무꼬',sessionId);
-    if (!sessionId) throw new UnauthorizedException();
+    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     return this.usersService.updateUserProfile(sessionId, updateUserDto);
   }
