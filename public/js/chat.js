@@ -16,6 +16,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     const room = await res.json();
+    console.log(room);
     if (!res.ok) {
       container.innerHTML = '<h3>존재하지 않거나 접근할 수 없는 방입니다.</h3>';
       return;
@@ -26,19 +27,25 @@ export async function renderChatRoom(container, user, roomId) {
     
     <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
       <!-- 채팅 메시지 영역 -->
-      <div id="chat-messages" class="border rounded p-2 flex-grow-1 overflow-auto" style="height: 300px; background-color: #fff;">
+      <div id="chat-messages" class="border rounded p-2 flex-grow-1 overflow-auto" style="height: 400px; background-color: #fff;">
       </div>
   
       <!-- 유저 목록 영역 -->
-      <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 300px; width: 200px; overflow-y: auto;">
+      <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 400px; width: 250px; overflow-y: auto;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>참여자</strong>
+          <span id="user-count" class="badge bg-primary rounded-pill">0 / ${room.maxMembers}</span>
+        </div>
         <ul id="users-list" class="list-group"></ul>
       </div>
     </div>
   
-    <form id="chat-form" class="mt-3 d-flex">
-      <input type="text" id="chat-input" class="form-control me-2" placeholder="메세지 입력..." />
-      <button type="submit" class="btn btn-primary">전송</button>
-    </form>
+    <div id="chat-form" class="mt-3 hstack gap-3">
+      <input class="form-control me-auto" type="text" placeholder="메세지를 입력하세요" aria-label="메세지를 입력하세요">
+      <button type="button" id="chat-input" class="btn btn-secondary">Submit</button>
+      <div class="vr"></div>
+      <button type="button" class="btn btn-outline-danger">Reset</button>
+    </div>
     `;
 
     const userList = document.getElementById('users-list');
@@ -55,13 +62,14 @@ export async function renderChatRoom(container, user, roomId) {
     socket.emit('joinRoom', { roomId });
 
     socket.on('systemMessage', data => {
-      console.log(data);
+      // 입/퇴장 메세지 출력
       const p = document.createElement('p');
       const strong = document.createElement('strong');
-      strong.appendChild(document.createTextNode(data.msg)); // XSS 안전
+      strong.appendChild(document.createTextNode(data.msg));
       p.appendChild(strong);
       chatMessages.appendChild(p);
-
+    
+      // 접속 유저 표시
       const roomUsers = data.roomUsers;
       userList.innerHTML = '';
       roomUsers.forEach(user => {
@@ -70,8 +78,12 @@ export async function renderChatRoom(container, user, roomId) {
         li.classList.add('list-group-item','list-group-item-primary');
         userList.appendChild(li);
       });
+    
+      // 접속 인원수 표시
+      const userCount = document.getElementById('user-count');
+      userCount.textContent = `${data.roomUserCount} / ${room.maxMembers}`;
     });
-
+    
     socket.on('chatMessage', data => {
       const p = document.createElement('p');
       p.innerHTML = `<strong>${data.username}:</strong> ${data.msg}`;
