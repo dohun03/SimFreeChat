@@ -37,7 +37,7 @@ export function renderProfile(container) {
     if (password) payload.password = password;
 
     try {
-      const res = await fetch('http://localhost:4000/users/me', {
+      const res = await fetch('/users/me', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

@@ -9,15 +9,22 @@ export async function renderChatRoom(container, user, roomId) {
 
   currentRoomId = roomId;
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+  }
+
   try {
-    const res = await fetch(`http://localhost:4000/rooms/${roomId}`, {
+    const roomResponse = await fetch(`/rooms/${roomId}`, {
       method: 'GET',
       credentials: 'include',
     });
-
-    const room = await res.json();
-    console.log(room);
-    if (!res.ok) {
+    const room = await roomResponse.json();
+    if (!roomResponse.ok) {
       container.innerHTML = '<h3>존재하지 않거나 접근할 수 없는 방입니다.</h3>';
       return;
     }
@@ -28,6 +35,7 @@ export async function renderChatRoom(container, user, roomId) {
     <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
       <!-- 채팅 메시지 영역 -->
       <div id="chat-messages" class="border rounded p-2 flex-grow-1 overflow-auto" style="height: 400px; background-color: #fff;">
+
       </div>
   
       <!-- 유저 목록 영역 -->
@@ -40,9 +48,9 @@ export async function renderChatRoom(container, user, roomId) {
       </div>
     </div>
   
-    <div id="chat-form" class="mt-3 hstack gap-3">
-      <input class="form-control me-auto" type="text" placeholder="메세지를 입력하세요" aria-label="메세지를 입력하세요">
-      <button type="button" id="chat-input" class="btn btn-secondary">Submit</button>
+    <div class="mt-3 hstack gap-3">
+      <input id="chat-input" class="form-control me-auto" type="text" placeholder="메세지를 입력하세요" aria-label="메세지를 입력하세요">
+      <button type="button" id="chat-submit" class="btn btn-outline-primary">Submit</button>
       <div class="vr"></div>
       <button type="button" class="btn btn-outline-danger">Reset</button>
     </div>
@@ -50,7 +58,7 @@ export async function renderChatRoom(container, user, roomId) {
 
     const userList = document.getElementById('users-list');
     const chatMessages = document.getElementById('chat-messages');
-    const chatForm = document.getElementById('chat-form');
+    const chatSubmit = document.getElementById('chat-submit');
     const chatInput = document.getElementById('chat-input');
 
     socket = io('http://localhost:4000', { 
@@ -85,19 +93,80 @@ export async function renderChatRoom(container, user, roomId) {
     });
     
     socket.on('chatMessage', data => {
-      const p = document.createElement('p');
-      p.innerHTML = `<strong>${data.username}:</strong> ${data.msg}`;
-      chatMessages.appendChild(p);
+      const createdAt = new Date().toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const li = document.createElement('li');
+      li.classList.add('list-group-item');
+      li.innerHTML = `
+        <div class="d-flex justify-content-between">
+          <div>
+            <strong class="text-primary">${escapeHtml(data.user.username)}</strong><br>
+            <span>${escapeHtml(data.content)}</span>
+          </div>
+          <small class="text-muted">${createdAt}</small>
+        </div>
+      `;
+      messagesList.appendChild(li);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
-    chatForm.addEventListener('submit', e => {
-      e.preventDefault();
-      const msg = chatInput.value.trim();
-      if (!msg) return;
-      socket.emit('sendMessage', { roomId, msg });
-      chatInput.value = '';
+    // 기존 채팅 메세지 출력
+    const MessagesResponse = await fetch(`/messages/${roomId}`, {
+      method: 'GET'
     });
+    const messages = await MessagesResponse.json();
+
+    chatMessages.innerHTML = `
+      <ul id="messages-list" class="list-group list-group-flush"></ul>
+    `;
+    const messagesList = document.getElementById('messages-list');
+
+    messages.forEach((msg) => {
+      const createdAt = new Date(msg.created_at).toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      const li = document.createElement('li');
+      li.classList.add('list-group-item');
+      li.innerHTML = `
+        <div class="d-flex justify-content-between">
+          <div>
+            <strong class="text-primary">${escapeHtml(msg.user.username)}</strong><br>
+            <span>${escapeHtml(msg.content)}</span>
+          </div>
+          <small class="text-muted">${createdAt}</small>
+        </div>
+      `;
+      messagesList.appendChild(li);
+    });
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    chatSubmit.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { 
+        // 엔터만 누르면 전송 (Shift+Enter는 줄바꿈)
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    
+    function sendMessage() {
+      const content = chatInput.value.trim();
+      if (!content) return;
+    
+      socket.emit('sendMessage', { roomId, content });
+      chatInput.value = '';
+    }
   } catch (err) {
     container.innerHTML = `<h3>서버 에러가 발생했습니다. ${err}</h3>`;
   }

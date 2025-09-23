@@ -9,6 +9,7 @@ import { Server, Socket } from 'socket.io';
 import { RedisService } from 'src/redis/redis.service';
 import { ChatService } from './chat.service';
 import { OnEvent } from '@nestjs/event-emitter';
+import { MessagesService } from 'src/messages/messages.service';
 
 @WebSocketGateway({
   cors: {
@@ -24,6 +25,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly chatService: ChatService,
+    private readonly messagesService: MessagesService,
     private redisService: RedisService,
   ) {}
 
@@ -126,5 +128,36 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       user,
       roomUserCount,
     });
+  }
+
+  @SubscribeMessage('sendMessage')
+  async handleMessage(client: Socket, payload: { roomId: number, content: string}) {
+    const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
+    const sessionId = cookieHeader
+      ?.split('; ')
+      .find(c => c.startsWith('SESSIONID='))
+      ?.split('=')[1];
+
+    if (!sessionId) {
+      console.warn('세션이 존재하지 않습니다.');
+      client.disconnect();
+      return;
+    }
+
+    const user = await this.redisService.getSession(sessionId);
+    if (!user) {
+      console.warn('사용자가 존재하지 않습니다.');
+      client.disconnect();
+      return;
+    }
+
+    const message = await this.messagesService.createMessage({
+      roomId: payload.roomId, 
+      userId: user.userId, 
+      content: payload.content
+    });
+
+    console.log("이터널 리턴:",message);
+    this.server.to(payload.roomId.toString()).emit('chatMessage', message);
   }
 }
