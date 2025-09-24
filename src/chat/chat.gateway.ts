@@ -118,11 +118,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // EventEmitter 이벤트(@OnEvent) 방식
   @OnEvent('leaveAllRooms')
   async handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, user: any }) {
-    // 여기서 client.leave는 사용하지 않고,
     // server.to(roomId).emit로 방 브로드캐스트만 처리
-    // 방 전체에 퇴장 메시지 전송
     const { roomId, roomUserCount, user } = payload;
-    console.log('gateway 테스트여',roomId, "그리고", user);
+
     this.server.to(roomId.toString()).emit('systemMessage', {
       msg: `${user.username} 님이 퇴장했습니다.`,
       user,
@@ -157,7 +155,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       content: payload.content
     });
 
-    console.log("이터널 리턴:",message);
     this.server.to(payload.roomId.toString()).emit('chatMessage', message);
   }
 }
