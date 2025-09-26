@@ -16,10 +16,6 @@ export class ChatService {
 
   async joinRoom(roomId: number, userId: number) {
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
-    console.log('이미 존재 여부',isUserInRoom);
-    if (isUserInRoom) {
-      return { isUserInRoom: true };
-    }
 
     await this.redisService.addUserToRoom(roomId, userId);
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
@@ -29,7 +25,7 @@ export class ChatService {
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
-    return { isUserInRoom: false, roomUsers, roomUserCount }
+    return { isUserInRoom: !!isUserInRoom, roomUsers, roomUserCount }
   }
 
   async leaveRoom(roomId: number, userId: number) {

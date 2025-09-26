@@ -9,15 +9,6 @@ window.addEventListener('beforeunload', () => {
   leaveChatRoom();
 });
 
-const socket = io("http://localhost:4000", {
-  withCredentials: true,
-});
-
-socket.on('leaveChat', ({ userId }) => {
-  console.log(userId + ' 유저가 방에서 나갔습니다.');
-  updateUIAfterLeave(userId); // 공통 UI 처리
-});
-
 const app = document.getElementById('app');
 // 라우팅 처리 (간단 hash 방식)
 async function router() {

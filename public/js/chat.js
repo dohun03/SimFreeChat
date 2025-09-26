@@ -47,7 +47,7 @@ export async function renderChatRoom(container, user, roomId) {
   }
 
   try {
-    // 서버에서 방 정보 조회
+    // 방 정보 조회
     const roomResponse = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
       method: 'GET',
       credentials: 'include',
@@ -111,6 +111,17 @@ export async function renderChatRoom(container, user, roomId) {
     });
     socket.emit('joinRoom', { roomId });
 
+    // [강제 연결 끊김 이벤트]
+    socket.on('forcedDisconnect', data => {
+      container.innerHTML = `
+      <div class="alert alert-danger d-flex align-items-center mt-4" role="alert">
+        <div>
+          ${escapeHtml(data.msg)}
+        </div>
+      </div>
+    `;
+    })
+
     // [공용 UI 소켓 이벤트]
     socket.on('systemMessage', data => {
       // 입/퇴장 메시지 표시
@@ -156,7 +167,7 @@ export async function renderChatRoom(container, user, roomId) {
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
-    // 기존 채팅 메시지 불러오기
+    // 기존 채팅 메시지 조회
     const MessagesResponse = await fetch(`/messages/${encodeURIComponent(roomId)}`, {
       method: 'GET'
     });
@@ -235,6 +246,7 @@ export async function renderChatRoom(container, user, roomId) {
 export function leaveChatRoom() {
   if (socket && currentRoomId) {
     socket.emit('leaveRoom', { roomId: currentRoomId });
+    socket.off();
     socket.disconnect();
     socket = null;
   }
