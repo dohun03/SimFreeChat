@@ -50,9 +50,17 @@ export class ChatService {
     await Promise.all(
       keys.map(async (key) => {
         const roomId = Number(key.split(':')[1]);
-        const roomUserCount = await this.redisService.getRoomUserCount(roomId);
+
         await this.redisService.removeUserFromRoom(roomId, session.userId);
-        this.chatEvents.leaveAllRooms(roomId, roomUserCount, session);
+
+        const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+        const roomUsers = await this.userRepository.find({
+          where: { id: In(roomUsersArray.map(userId => Number(userId))) },
+          select: ['id','username']
+        });
+        const roomUserCount = await this.redisService.getRoomUserCount(roomId);
+
+        this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, session);
       })
     );
   }

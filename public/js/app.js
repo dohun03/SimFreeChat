@@ -5,6 +5,18 @@ import { renderProfile } from './profile.js';
 import { renderRoomsList } from './rooms.js';
 import { leaveChatRoom, renderChatRoom } from './chat.js';
 
+// XSS 방지 함수
+export function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// 창 닫기, 새로고침, 페이지 이동 시 발생
 window.addEventListener('beforeunload', () => {
   leaveChatRoom();
 });

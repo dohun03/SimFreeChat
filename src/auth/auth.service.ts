@@ -19,8 +19,6 @@ export class AuthService {
   async logIn(loginUserDto: LoginUserDto) {
     const { username, password } = loginUserDto;
 
-    console.log(username, password);
-
     const user = await this.userRepository.findOne({ where: { username }});
     if (!user) {
       throw new UnauthorizedException('아이디 또는 비밀번호가 올바르지 않습니다.');
@@ -37,10 +35,10 @@ export class AuthService {
 
     const sessionId = uuid();
     await this.redisService.createSession(sessionId, { 
-        userId: user.id, 
-        username: user.username, 
-        isAdmin: user.is_admin, 
-        isBanned: user.is_banned 
+      userId: user.id, 
+      username: user.username, 
+      isAdmin: user.is_admin, 
+      isBanned: user.is_banned 
     });
 
     const { password: removed, ...safeUser } = user;

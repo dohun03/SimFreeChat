@@ -1,10 +1,11 @@
-// js/roomsList.js
+import { escapeHtml } from './app.js'
+
 export function renderRoomsList(container) {
   container.innerHTML = `
     <div class="mb-3">
       <input type="text" id="search" placeholder="방 제목 검색" class="form-control d-inline-block w-75"/>
       <button id="search-btn" class="btn btn-success">검색</button>
-      <button id="create-room" class="btn btn-primary float-end">방 생성</button>
+      <button id="create-room-btn" class="btn btn-primary float-end">방 생성</button>
     </div>
     <table class="table table-bordered table-hover">
     <col style="width: 70%"/>
@@ -28,10 +29,11 @@ export function renderRoomsList(container) {
   const tbody = document.getElementById('rooms-tbody');
   const searchInput = document.getElementById('search');
   const searchBtn = document.getElementById('search-btn');
+  const createRoomhBtn = document.getElementById('create-room-btn');
 
   async function loadRooms(search='') {
     try {
-      const res = await fetch(`http://localhost:4000/rooms?search=${search}`, {
+      const res = await fetch(`http://localhost:4000/rooms?search=${encodeURIComponent(search)}`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -41,12 +43,12 @@ export function renderRoomsList(container) {
         tbody.innerHTML = `<tr><td colspan="4">채팅방이 없습니다.</td></tr>`;
         return;
       }
-      console.log(rooms);
+
       rooms.forEach(room => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${room.name}</td>
-          <td class="text-center">${room.owner.username}</td>
+          <td>${escapeHtml(room.name)}</td>
+          <td class="text-center">${escapeHtml(room.owner.username)}</td>
           <td class="text-center">${room.currentMembers} / ${room.maxMembers}</td>
           <td class="text-center">${room.isPrivate ? '🔒 비공개' : '🌐 공개'}</td>
         `;

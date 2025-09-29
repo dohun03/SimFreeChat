@@ -31,7 +31,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly messagesService: MessagesService,
     private redisService: RedisService,
   ) {}
+  
+  handleConnection(client: Socket) {
+    console.log(`WEBSOCKET CONNECT: ${client.id}`);
+    // this.server.sockets.sockets.forEach((socket, id) => {
+    //   console.log("소켓 아이디:",id);
+    // });
+  }
 
+  handleDisconnect(client: Socket) {
+    // 자동으로 소켓 제거된 시점
+    console.log(`WEBSOCKET DISCONNECT: ${client.id}`);
+    // userSocket에서 해당 소켓 제거
+    for (const [userId, socketMap] of this.userSocket.entries()) {
+      if (socketMap.has(client.id)) {
+        socketMap.delete(client.id);
+        if (socketMap.size === 0) {
+          this.userSocket.delete(userId);
+        }
+        break;
+      }
+    }
+  }
+
+  // 소켓 추가 메서드
   addUserSocket(userId: number, socketId: string, roomId: number) {
     if (!this.userSocket.has(userId)) {
       this.userSocket.set(userId, new Map());
@@ -43,6 +66,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
+  // 강제 소켓 삭제 메서드
   removeUserSocket(userId: number, roomId: number) {
     const socketMap = this.userSocket.get(userId);
     if (!socketMap) return;
@@ -68,17 +92,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  handleConnection(client: Socket) {
-    console.log(`WEBSOCKET CONNECT: ${client.id}`);
-    // this.server.sockets.sockets.forEach((socket, id) => {
-    //   console.log("소켓 아이디:",id);
-    // });
-  }
-
-  handleDisconnect(client: Socket) {
-    console.log(`WEBSOCKET DISCONNECT: ${client.id}`);
-  }
-
   // WebSocket 이벤트(@SubscribeMessage) 방식
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(client: Socket, payload: { roomId: number }) {
@@ -101,21 +114,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
+    // 방 입장 로직
     const { isUserInRoom, roomUsers, roomUserCount } =
       await this.chatService.joinRoom(payload.roomId, user.userId);
 
-    // if (isUserInRoom) {
-    //   console.warn('이미 접속 중인 방입니다.');
-    //   client.disconnect();
-    //   return;
-    //   // await this.handleLeaveRoom(client, payload);
-    // }
-
-    client.join(payload.roomId.toString());
-    console.log(`웹소켓 연결: ${client.id}, 방: ${payload.roomId}, 유저: ${user.username}`);
-
     this.removeUserSocket(user.userId, payload.roomId);
     this.addUserSocket(user.userId, client.id, payload.roomId);
+    client.join(payload.roomId.toString());
     
     // 방 전체에 입장 메시지 전송
     this.server.to(payload.roomId.toString()).emit('systemMessage', {
@@ -132,6 +137,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       ?.split('; ')
       .find(c => c.startsWith('SESSIONID='))
       ?.split('=')[1];
+
+      console.log("why",payload, sessionId);
 
     if (!sessionId) {
       console.warn('세션이 존재하지 않습니다.');
@@ -150,7 +157,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await this.chatService.leaveRoom(payload.roomId, user.userId);
 
     client.leave(payload.roomId.toString());
-    console.log(`웹소켓 연결 해제: ${client.id}, 방: ${payload.roomId}, 유저: ${user.username}`);
 
     // 방 전체에 퇴장 메시지 전송
     this.server.to(payload.roomId.toString()).emit('systemMessage', {
@@ -162,13 +168,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // EventEmitter 이벤트(@OnEvent) 방식
   @OnEvent('leaveAllRooms')
-  async handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, user: any }) {
-    // server.to(roomId).emit로 방 브로드캐스트만 처리
-    const { roomId, roomUserCount, user } = payload;
+  async handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
+    const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
+    
+    this.removeUserSocket(roomUsers.id , roomId);
 
     this.server.to(roomId.toString()).emit('systemMessage', {
-      msg: `${user.username} 님이 퇴장했습니다.`,
-      user,
+      msg: `${deletedUser.username} 님이 퇴장했습니다.`,
+      roomUsers,
       roomUserCount,
     });
   }

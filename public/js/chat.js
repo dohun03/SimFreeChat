@@ -1,3 +1,5 @@
+import { escapeHtml } from './app.js'
+
 let socket = null;
 let currentRoomId = null;
 
@@ -8,17 +10,6 @@ export async function renderChatRoom(container, user, roomId) {
   }
 
   currentRoomId = roomId;
-
-  // XSS 방지 함수
-  function escapeHtml(str) {
-    if (str == null) return '';
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
 
   // 시스템 알림 함수
   function showSystemAlert(message) {
@@ -103,7 +94,7 @@ export async function renderChatRoom(container, user, roomId) {
     const chatReset = document.getElementById('chat-reset');
 
     // Socket.io 연결
-    socket = io('http://localhost:4000', { 
+    socket = io('http://localhost:4000', {
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: 10,
@@ -129,6 +120,7 @@ export async function renderChatRoom(container, user, roomId) {
 
       // 접속 유저 표시
       userList.innerHTML = '';
+      console.log("roomuser",data.roomUsers);
       data.roomUsers.forEach(u => {
         const li = document.createElement('li');
         li.textContent = u.username;
@@ -242,9 +234,11 @@ export async function renderChatRoom(container, user, roomId) {
   }
 }
 
-// 채팅방 나가기
+// 채팅방 나가기 / 방에 접속된 상태에서 로그아웃하면 
+// leaveAllrooms이후 leaveRoom 중복 실행됨. 예외처리 해야할듯?
 export function leaveChatRoom() {
   if (socket && currentRoomId) {
+    console.log("방 나가기");
     socket.emit('leaveRoom', { roomId: currentRoomId });
     socket.off();
     socket.disconnect();
