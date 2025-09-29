@@ -42,7 +42,7 @@ export class UsersService {
   }
 
   // 본인 프로필 불러오기
-  async getUserProfile(sessionId: string): Promise<User | null> {
+  async getMyProfile(sessionId: string): Promise<User | null> {
     const session = await this.redisService.getSession(sessionId);
 
     const user = await this.userRepository.findOne({
@@ -53,7 +53,7 @@ export class UsersService {
   }
 
   // 본인 프로필 수정하기
-  async updateUserProfile(sessionId: string, updateUserDto: UpdateUserDto) {
+  async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto) {
     const session = await this.redisService.getSession(sessionId);
 
     const user = await this.userRepository.findOne({

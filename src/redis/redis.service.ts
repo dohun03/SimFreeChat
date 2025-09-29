@@ -33,7 +33,7 @@ export class RedisService {
     await this.redis.srem(`room:${roomId}:online`, userId);
   }
 
-  async getAllRooms() {
+  async getAllRoomKeys() {
     return this.redis.keys('room:*:online');
   }
 

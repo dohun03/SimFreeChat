@@ -63,5 +63,9 @@ export function renderRoomsList(container) {
 
   searchBtn.addEventListener('click', () => loadRooms(searchInput.value));
 
+  createRoomhBtn.addEventListener('click', () => {
+    location.href = ''
+  })
+
   loadRooms();
 }

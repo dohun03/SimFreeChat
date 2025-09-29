@@ -44,7 +44,7 @@ export class ChatService {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
     
-    const keys = await this.redisService.getAllRooms();
+    const keys = await this.redisService.getAllRoomKeys();
     console.log("sessions:",session);
 
     await Promise.all(

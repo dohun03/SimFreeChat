@@ -6,8 +6,9 @@ import { RoomsService } from './rooms.service';
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
+  // 방 생성
   @Post()
-  createRoom(
+  create(
     @Body() createRoomDto: CreateRoomDto,
     @Req() req: any
   ) {
@@ -17,13 +18,15 @@ export class RoomsController {
     return this.roomsService.createRoom(sessionId, createRoomDto);
   }
 
+  // 방 전체 조회
   @Get()
-  getAllRooms(@Query('search') search?: string) {
+  findAll(@Query('search') search?: string) {
     return this.roomsService.getAllRooms(search);
   }
 
+  // 방 하나 조회
   @Get('/:roomId')
-  getRoom(
+  findOne(
     @Param('roomId') roomId: number,
     @Req() req: any
   ) {

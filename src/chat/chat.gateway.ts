@@ -24,7 +24,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
   
-  private userSocket: Map<number, Map<string, number>> = new Map();
+  private userSockets: Map<number, Map<string, number>> = new Map();
 
   constructor(
     private readonly chatService: ChatService,
@@ -42,12 +42,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleDisconnect(client: Socket) {
     // 자동으로 소켓 제거된 시점
     console.log(`WEBSOCKET DISCONNECT: ${client.id}`);
-    // userSocket에서 해당 소켓 제거
-    for (const [userId, socketMap] of this.userSocket.entries()) {
+    // userSockets에서 해당 소켓 제거
+    for (const [userId, socketMap] of this.userSockets.entries()) {
       if (socketMap.has(client.id)) {
         socketMap.delete(client.id);
         if (socketMap.size === 0) {
-          this.userSocket.delete(userId);
+          this.userSockets.delete(userId);
         }
         break;
       }
@@ -56,10 +56,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // 소켓 추가 메서드
   addUserSocket(userId: number, socketId: string, roomId: number) {
-    if (!this.userSocket.has(userId)) {
-      this.userSocket.set(userId, new Map());
+    if (!this.userSockets.has(userId)) {
+      this.userSockets.set(userId, new Map());
     }
-    this.userSocket.get(userId)!.set(socketId, roomId);
+    this.userSockets.get(userId)!.set(socketId, roomId);
 
     this.server.sockets.sockets.forEach((socket, id) => {
       console.log("추가 후 소켓들:",id);
@@ -68,7 +68,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // 강제 소켓 삭제 메서드
   removeUserSocket(userId: number, roomId: number) {
-    const socketMap = this.userSocket.get(userId);
+    const socketMap = this.userSockets.get(userId);
     if (!socketMap) return;
 
     const deleteId: string[] = [];

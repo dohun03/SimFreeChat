@@ -9,28 +9,28 @@ export class UsersController {
 
   @Post('register')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  async createUser(@Body() createUserDto: CreateUserDto) { // 요청 본문(JSON)을 CreateUserDto 타입으로 매핑
+  async create(@Body() createUserDto: CreateUserDto) { // 요청 본문(JSON)을 CreateUserDto 타입으로 매핑
     await this.usersService.createUser(createUserDto);
     return { message: "회원가입 성공"};
   }
 
   @Get('me')
-  async getUserProfile(@Req() req: any) {
+  async findMe(@Req() req: any) {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
-    return this.usersService.getUserProfile(sessionId);
+    return this.usersService.getMyProfile(sessionId);
   }
 
   @Patch('me')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  updateUserProfile(
+  updateMe(
     @Body() updateUserDto: UpdateUserDto, 
     @Req() req: any
   ) {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
-    return this.usersService.updateUserProfile(sessionId, updateUserDto);
+    return this.usersService.updateMyProfile(sessionId, updateUserDto);
   }
 }
