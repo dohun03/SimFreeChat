@@ -2,6 +2,7 @@ import { renderHeader } from './header.js';
 import { renderLogin } from './login.js';
 import { renderRegister } from './register.js';
 import { renderProfile } from './profile.js';
+import { renderCreateRoom } from './createRoom.js';
 import { renderRoomsList } from './rooms.js';
 import { leaveChatRoom, renderChatRoom } from './chat.js';
 
@@ -41,6 +42,9 @@ async function router() {
       break;
     case path === '/profile':
       renderProfile(app);
+      break;
+    case path === '/create-room':
+      renderCreateRoom(app, user);
       break;
     case path.startsWith('/room/'):
       const roomId = path.split('/')[2];

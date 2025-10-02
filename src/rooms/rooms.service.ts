@@ -15,16 +15,15 @@ export class RoomsService {
 
   // 방 생성
   async createRoom(sessionId: string, createRoomDto: CreateRoomDto): Promise<Room> {
-    const { name, maxMembers, isPrivate, password } = createRoomDto;
+    const { name, maxMembers, password } = createRoomDto;
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     const room = this.roomRepository.create({
       name, 
       owner: session.userId,
-      maxMembers, 
-      isPrivate, 
-      password
+      maxMembers,
+      password,
     });
 
     return await this.roomRepository.save(room);
@@ -32,7 +31,7 @@ export class RoomsService {
 
   // 방 전체 조회
   async getAllRooms(search: any) {
-    const where: any = { isPrivate: false }
+    const where: any = new Object();
 
     if (search) {
       where.name = Like(`%${search}%`);
@@ -47,7 +46,7 @@ export class RoomsService {
           name: room.name,
           currentMembers: roomUserCount,
           maxMembers: room.maxMembers,
-          isPrivate: room.isPrivate,
+          password: room.password ? true : false,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
           owner: {

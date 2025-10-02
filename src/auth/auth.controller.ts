@@ -13,7 +13,7 @@ export class AuthController {
 
   @Post('login')
   async logIn(
-    @Body() loginUserDto: LoginUserDto, 
+    @Body() loginUserDto: LoginUserDto,
     @Req() req: any,
     @Res({ passthrough: true}) res: Response
   ) { // CreateUserDto 타입으로 매핑

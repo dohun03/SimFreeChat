@@ -44,13 +44,15 @@ export function renderRoomsList(container) {
         return;
       }
 
+      console.log(rooms);
+
       rooms.forEach(room => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(room.name)}</td>
           <td class="text-center">${escapeHtml(room.owner.username)}</td>
           <td class="text-center">${room.currentMembers} / ${room.maxMembers}</td>
-          <td class="text-center">${room.isPrivate ? '🔒 비공개' : '🌐 공개'}</td>
+          <td class="text-center">${room.password ? '🔒 비공개' : '🌐 공개'}</td>
         `;
         tr.style.cursor = 'pointer';
         tr.addEventListener('click', () => location.hash = `#/room/${room.id}`);
@@ -64,7 +66,7 @@ export function renderRoomsList(container) {
   searchBtn.addEventListener('click', () => loadRooms(searchInput.value));
 
   createRoomhBtn.addEventListener('click', () => {
-    location.href = ''
+    window.location.hash = '/create-room';
   })
 
   loadRooms();

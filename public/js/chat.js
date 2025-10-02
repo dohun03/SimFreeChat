@@ -64,7 +64,7 @@ export async function renderChatRoom(container, user, roomId) {
         </div>
 
         <!-- 유저 목록 영역 -->
-        <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 400px; width: 300px; overflow-y: auto;">
+        <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 400px; min-width: 200px; overflow-y: auto;">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <strong>참여자</strong>
             <span id="user-count" class="badge bg-primary rounded-pill">0 / ${escapeHtml(room.maxMembers)}</span>

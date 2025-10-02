@@ -181,7 +181,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('sendMessage')
-  async handleMessage(client: Socket, payload: { roomId: number, content: string}) {
+  async handleSendMessage(client: Socket, payload: { roomId: number, content: string}) {
     const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
     const sessionId = cookieHeader
       ?.split('; ')

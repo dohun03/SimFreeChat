@@ -3,15 +3,14 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
-@Controller('users') // 기본 /users 경로로 시작
+@Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {} // 서비스 클래스 자동 주입, 서비스의 메서드 호출 가능
+  constructor(private readonly usersService: UsersService) {}
 
   @Post('register')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
-  async create(@Body() createUserDto: CreateUserDto) { // 요청 본문(JSON)을 CreateUserDto 타입으로 매핑
+  async create(@Body() createUserDto: CreateUserDto) {
     await this.usersService.createUser(createUserDto);
-    return { message: "회원가입 성공"};
+    return { message: "회원가입 성공" };
   }
 
   @Get('me')
@@ -23,7 +22,6 @@ export class UsersController {
   }
 
   @Patch('me')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   updateMe(
     @Body() updateUserDto: UpdateUserDto, 
     @Req() req: any

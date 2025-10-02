@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CreateMeSsageDto } from './dto/create-message.dto';
+import { CreateMessageDto } from './dto/create-message.dto';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { Message } from './messages.entity';
 
@@ -12,8 +12,8 @@ export class MessagesService {
     private readonly messageRepository: Repository<Message>
   ) {}
 
-  async createMessage(createMeSsageDto: CreateMeSsageDto): Promise<ResponseMessageDto> {
-    const { roomId, userId, content } = createMeSsageDto;
+  async createMessage(createMessageDto: CreateMessageDto): Promise<ResponseMessageDto> {
+    const { roomId, userId, content } = createMessageDto;
 
     const newMessage = this.messageRepository.create({
       room: { id: roomId },

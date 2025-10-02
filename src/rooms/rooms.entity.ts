@@ -16,8 +16,8 @@ export class Room {
   @Column({ type: 'int', default: 10, name: 'max_members' })
   maxMembers: number;
 
-  @Column({ default: false, name: 'is_private' })
-  isPrivate: boolean;
+  // @Column({ default: false, name: 'is_private' })
+  // isPrivate: boolean;
 
   @Column({ nullable: true })
   password: string;

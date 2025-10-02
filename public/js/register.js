@@ -22,9 +22,10 @@ export function renderRegister(container) {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorMessage = document.getElementById('register-msg');
 
     if (password !== confirmPassword) {
-      document.getElementById('register-msg').innerText = '비밀번호 불일치';
+      errorMessage.innerText = '비밀번호 불일치';
       return;
     }
 
@@ -38,10 +39,10 @@ export function renderRegister(container) {
       if (res.ok) {
         location.hash = '#/login';
       } else {
-        document.getElementById('register-msg').innerText = data.message || '회원가입 실패';
+        errorMessage.innerText = data.message || '회원가입 실패';
       }
     } catch {
-      document.getElementById('register-msg').innerText = '서버 오류';
+      errorMessage.innerText = '서버 오류';
     }
   });
 }
