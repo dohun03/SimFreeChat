@@ -3,6 +3,7 @@ import { renderLogin } from './login.js';
 import { renderRegister } from './register.js';
 import { renderProfile } from './profile.js';
 import { renderCreateRoom } from './createRoom.js';
+import { renderEditRoom } from './editRoom.js';
 import { renderRoomsList } from './rooms.js';
 import { leaveChatRoom, renderChatRoom } from './chat.js';
 
@@ -46,10 +47,16 @@ async function router() {
     case path === '/create-room':
       renderCreateRoom(app, user);
       break;
-    case path.startsWith('/room/'):
+    case path.startsWith('/edit-room/'): {
+      const roomId = path.split('/')[2];
+      renderEditRoom(app, user, roomId);
+      break;
+    }
+    case path.startsWith('/room/'): {
       const roomId = path.split('/')[2];
       renderChatRoom(app, user, roomId);
       break;
+    }
     case path === '/':
       renderRoomsList(app);
       break;

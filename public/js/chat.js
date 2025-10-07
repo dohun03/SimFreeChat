@@ -48,10 +48,12 @@ export async function renderChatRoom(container, user, roomId) {
       container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
-
-    // DOM 구성
+    
     container.innerHTML = `
-      <h3 class="mb-3 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
+      <div class="mt-3 hstack gap-3">
+        <h3 id="room-name" class="mb-3 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
+        <button type="button" id="chat-edit" class="btn btn-sm btn-primary align-self-start ${room.owner.id===user.id ? '': 'd-none'}">수정</button>
+      </div>
       <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
         <div class="flex-grow-1 position-relative">
           <!-- 시스템 알림 영역 -->
@@ -67,14 +69,17 @@ export async function renderChatRoom(container, user, roomId) {
         <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 400px; min-width: 200px; overflow-y: auto;">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <strong>참여자</strong>
-            <span id="user-count" class="badge bg-primary rounded-pill">0 / ${escapeHtml(room.maxMembers)}</span>
+            <span id="user-count" class="badge bg-primary rounded-pill">
+              <span id="current-count">0</span> /
+              <span id="max-count">${escapeHtml(room.maxMembers)}</span>
+            </span>
           </div>
           <ul id="users-list" class="list-group"></ul>
         </div>
       </div>
 
       <div class="mt-3 hstack gap-3">
-      <textarea id="chat-input"
+        <textarea id="chat-input"
         class="form-control me-auto"
         placeholder="메시지를 입력하세요"
         aria-label="메시지를 입력하세요"
@@ -86,12 +91,16 @@ export async function renderChatRoom(container, user, roomId) {
     
     `;
 
+    const roomName = document.getElementById('room-name');
     const userList = document.getElementById('users-list');
+    const currentCount = document.getElementById('current-count');
+    const maxCount = document.getElementById('max-count');
     const chatMessages = document.getElementById('chat-messages');
     const messagesList = document.getElementById('messages-list');
     const chatInput = document.getElementById('chat-input');
     const chatSubmit = document.getElementById('chat-submit');
     const chatReset = document.getElementById('chat-reset');
+    const chatEdit = document.getElementById('chat-edit');
 
     // Socket.io 연결
     socket = io('http://localhost:4000', {
@@ -102,7 +111,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
     socket.emit('joinRoom', { roomId });
 
-    // [강제 연결 끊김 이벤트]
+    // [강제 연결 끊김 Event]
     socket.on('forcedDisconnect', data => {
       container.innerHTML = `
       <div class="alert alert-danger d-flex align-items-center mt-4" role="alert">
@@ -111,16 +120,22 @@ export async function renderChatRoom(container, user, roomId) {
         </div>
       </div>
     `;
-    })
+    });
 
-    // [공용 UI 소켓 이벤트]
+    // [방 수정 Event]
+    socket.on('roomUpdated', data => {
+      showSystemAlert(data.msg);
+      roomName.textContent = data.room.name;
+      maxCount.textContent = data.room.maxMembers;
+    });
+
+    // [공용 UI 소켓 Event]
     socket.on('systemMessage', data => {
       // 입/퇴장 메시지 표시
       showSystemAlert(data.msg);
 
       // 접속 유저 표시
       userList.innerHTML = '';
-      console.log("roomuser",data.roomUsers);
       data.roomUsers.forEach(u => {
         const li = document.createElement('li');
         li.textContent = u.username;
@@ -129,11 +144,10 @@ export async function renderChatRoom(container, user, roomId) {
       });
 
       // 접속 인원수 표시
-      const userCount = document.getElementById('user-count');
-      userCount.textContent = `${escapeHtml(data.roomUserCount)} / ${escapeHtml(room.maxMembers)}`;
+      currentCount.textContent = data.roomUserCount;
     });
 
-    // 새 채팅 메시지 출력
+    // [새 채팅 메시지 출력 Event]
     socket.on('chatMessage', data => {
       const createdAt = new Date().toLocaleString('ko-KR', {
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -229,13 +243,17 @@ export async function renderChatRoom(container, user, roomId) {
       chatInput.value = '';
       resizeTextarea();
     });
+
+    // 채팅방 수정 페이지
+    chatEdit.addEventListener('click', () => {
+      window.open(`#/edit-room/${roomId}`, '_blank');
+    })
   } catch (err) {
     container.textContent = `서버 에러가 발생했습니다. ${err}`;
   }
 }
 
-// 채팅방 나가기 / 방에 접속된 상태에서 로그아웃하면 
-// leaveAllrooms이후 leaveRoom 중복 실행됨. 예외처리 해야할듯?
+// 채팅방 나가기
 export function leaveChatRoom() {
   if (socket && currentRoomId) {
     console.log("방 나가기");

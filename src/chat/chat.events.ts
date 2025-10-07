@@ -8,4 +8,12 @@ export class ChatEvents {
   leaveAllRooms(roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any) {
     this.eventEmitter.emit('leaveAllRooms', { roomId, roomUserCount, roomUsers, deletedUser });
   }
+
+  updateRoom(roomId: number, room: any) {
+    this.eventEmitter.emit('updateRoom', { roomId, room });
+  }
+
+  deleteRoom(roomId: number, userId: number) {
+    this.eventEmitter.emit('deleteRoom', { roomId, userId });
+  }
 }

@@ -61,9 +61,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     this.userSockets.get(userId)!.set(socketId, roomId);
 
-    this.server.sockets.sockets.forEach((socket, id) => {
-      console.log("추가 후 소켓들:",id);
-    });
+    // this.server.sockets.sockets.forEach((socket, id) => {
+    //   console.log("추가 후 소켓들:",id);
+    // });
+    console.log("입장이요",this.userSockets);
   }
 
   // 강제 소켓 삭제 메서드
@@ -87,7 +88,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
         socket.disconnect(true);
         socketMap.delete(sId);
-        console.log("삭제완료",sId);
       }
     }
   }
@@ -115,7 +115,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // 방 입장 로직
-    const { isUserInRoom, roomUsers, roomUserCount } =
+    const { roomUsers, roomUserCount } =
       await this.chatService.joinRoom(payload.roomId, user.userId);
 
     this.removeUserSocket(user.userId, payload.roomId);
@@ -177,6 +177,39 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       msg: `${deletedUser.username} 님이 퇴장했습니다.`,
       roomUsers,
       roomUserCount,
+    });
+  }
+
+  @OnEvent('updateRoom')
+  async handleUpdateRoom(payload: { roomId: number, room: number }) {
+    const { roomId, room } = payload;
+
+    console.log(roomId, room);
+    this.server.to(roomId.toString()).emit('roomUpdated', {
+      msg: '방 정보가 변경되었습니다.',
+      room,
+    });
+  }
+
+  @OnEvent('deleteRoom')
+  async handleDeleteRoom(payload: { roomId: number, userId: number }) {
+    const { roomId, userId } = payload;
+    
+    this.removeUserSocket(userId , roomId);
+
+    const userSocket = this.userSockets.get(userId);
+    if (!userSocket) {
+      console.log('소켓 아이디가 없습니다.');
+      return;
+    }
+
+    const [socketId] = userSocket.keys();
+
+    // 특정 사용자에게만 메시지 전송
+    this.server.to(socketId).emit('systemMessage', {
+      msg: '방이 삭제되었습니다.',
+      roomUsers: [],
+      roomUserCount: 0,
     });
   }
 

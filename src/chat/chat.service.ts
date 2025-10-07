@@ -15,9 +15,8 @@ export class ChatService {
   ) {}
 
   async joinRoom(roomId: number, userId: number) {
-    const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
-
     await this.redisService.addUserToRoom(roomId, userId);
+    
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     const roomUsers = await this.userRepository.find({
       where: { id: In(roomUsersArray.map(userId => Number(userId))) },
@@ -25,7 +24,7 @@ export class ChatService {
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
-    return { isUserInRoom: !!isUserInRoom, roomUsers, roomUserCount }
+    return { roomUsers, roomUserCount }
   }
 
   async leaveRoom(roomId: number, userId: number) {
@@ -50,17 +49,32 @@ export class ChatService {
     await Promise.all(
       keys.map(async (key) => {
         const roomId = Number(key.split(':')[1]);
-
         await this.redisService.removeUserFromRoom(roomId, session.userId);
 
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+
         const roomUsers = await this.userRepository.find({
           where: { id: In(roomUsersArray.map(userId => Number(userId))) },
           select: ['id','username']
         });
+
         const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
         this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, session);
+      })
+    );
+  }
+
+  updateRoom(roomId: number, room: any) {
+    this.chatEvents.updateRoom(roomId, room);
+  }
+
+  async deleteRoom(roomId: number) {
+    const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+    await this.redisService.deleteRoom(roomId);
+    await Promise.all(
+      roomUsersArray.map(userId => {
+        this.chatEvents.deleteRoom(roomId, Number(userId));
       })
     );
   }
