@@ -44,11 +44,18 @@ export class ChatService {
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
     
     const keys = await this.redisService.getAllRoomKeys();
-    console.log("sessions:",session);
 
     await Promise.all(
       keys.map(async (key) => {
         const roomId = Number(key.split(':')[1]);
+
+        const isUserInRoom = await this.redisService.isUserInRoom(roomId, session.userId);
+        
+        if (!isUserInRoom) {
+          console.log(`${roomId}번 방에는 ${session.username}님이 존재하지 않습니다.`);
+          return;
+        }
+
         await this.redisService.removeUserFromRoom(roomId, session.userId);
 
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
