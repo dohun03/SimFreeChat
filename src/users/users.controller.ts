@@ -14,7 +14,7 @@ export class UsersController {
   }
 
   @Get('me')
-  async findMe(@Req() req: any) {
+  async getMe(@Req() req: any) {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 

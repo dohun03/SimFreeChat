@@ -56,13 +56,13 @@ export class RoomsController {
 
   // 방 전체 조회
   @Get()
-  findAll(@Query('search') search?: string) {
+  getAll(@Query('search') search?: string) {
     return this.roomsService.getAllRooms(search);
   }
 
   // 방 하나 조회
   @Get('/:roomId')
-  findOne(
+  getById(
     @Param('roomId') roomId: number,
     @Req() req: any
   ) {

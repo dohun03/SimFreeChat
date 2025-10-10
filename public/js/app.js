@@ -57,9 +57,6 @@ async function router() {
       renderChatRoom(app, user, roomId);
       break;
     }
-    case path === '/error':
-      error(app);
-      break;
     case path === '/':
       renderRoomsList(app);
       break;

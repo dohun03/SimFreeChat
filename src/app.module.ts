@@ -4,7 +4,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { RoomsModule } from './rooms/rooms.module';
-import { RoomUsersModule } from './room-users/room-users.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthModule } from './auth/auth.module';
 import { RedisGlobalModule } from './redis/redis.module';
@@ -26,7 +25,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     EventEmitterModule.forRoot(),
     UsersModule,
     RoomsModule,
-    RoomUsersModule,
     MessagesModule,
     AuthModule,
     RedisGlobalModule,
