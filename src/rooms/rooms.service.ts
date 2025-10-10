@@ -21,7 +21,7 @@ export class RoomsService {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
     
-    let hashedPassword = '';
+    let hashedPassword: string | null = null;
     if (password) hashedPassword = await bcrypt.hash(password, 10);
 
     const room = this.roomRepository.create({
@@ -110,7 +110,21 @@ export class RoomsService {
 
     const room = await this.roomRepository.findOne({ where: { id: roomId } });
     if (!room) throw new NotFoundException('존재하지 않는 방입니다.');
+
+    const roomUserCount = await this.redisService.getRoomUserCount(roomId);
     
-    return room;
+    return {
+      id: room.id,
+      name: room.name,
+      currentMembers: roomUserCount,
+      maxMembers: room.maxMembers,
+      password: room.password ? true : false,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt,
+      owner: {
+        id: room.owner.id,
+        username: room.owner.username,
+      }
+    }
   }
 }

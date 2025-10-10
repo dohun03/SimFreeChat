@@ -17,8 +17,8 @@ import { map } from 'rxjs';
     origin: 'http://localhost:3000',
     credentials: true,
   },
-  pingInterval: 60000,  // 60초마다 ping
-  pingTimeout: 60000 * 5,   // 5분 동안 pong 없으면 연결 끊음
+  pingInterval: 60000 * 5,  // 5분마다 ping
+  pingTimeout: 60000 * 15,   // 15분 동안 pong 없으면 연결 끊음
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -64,7 +64,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // this.server.sockets.sockets.forEach((socket, id) => {
     //   console.log("추가 후 소켓들:",id);
     // });
-    console.log("입장이요",this.userSockets);
   }
 
   // 강제 소켓 삭제 메서드
@@ -94,76 +93,84 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // WebSocket 이벤트(@SubscribeMessage) 방식
   @SubscribeMessage('joinRoom')
-  async handleJoinRoom(client: Socket, payload: { roomId: number }) {
-    const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-    const sessionId = cookieHeader
-      ?.split('; ')
-      .find(c => c.startsWith('SESSIONID='))
-      ?.split('=')[1];
+  async handleJoinRoom(client: Socket, payload: { roomId: number, password: string }) {
+    try {
+      const { roomId, password } = payload;
+      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
+      const sessionId = cookieHeader
+        ?.split('; ')
+        .find(c => c.startsWith('SESSIONID='))
+        ?.split('=')[1];
+  
+      if (!sessionId) {
+        console.warn('세션이 존재하지 않습니다.');
+        client.disconnect();
+        return;
+      }
+  
+      const user = await this.redisService.getSession(sessionId);
+      if (!user) {
+        console.warn('세션에 유저 ID가 없습니다.');
+        client.disconnect();
+        return;
+      }
+      
+      // 방 전체에 입장 메시지 전송
+      const { roomUsers, afterCount } = await this.chatService.joinRoom(roomId, user.userId, password);
 
-    if (!sessionId) {
-      console.warn('세션이 존재하지 않습니다.');
+      // 방 입장 로직
+      this.removeUserSocket(user.userId, roomId);
+      this.addUserSocket(user.userId, client.id, roomId);
+      client.join(roomId.toString());
+  
+      this.server.to(roomId.toString()).emit('systemMessage', {
+        msg: `${user.username} 님이 입장했습니다.`,
+        roomUsers,
+        roomUserCount: afterCount,
+      });
+    } catch (err) {
+      client.emit('forcedDisconnect', { msg: err.message });
       client.disconnect();
-      return;
     }
-
-    const user = await this.redisService.getSession(sessionId);
-    if (!user) {
-      console.warn('세션에 유저 ID가 없습니다.');
-      client.disconnect();
-      return;
-    }
-
-    // 방 입장 로직
-    const { roomUsers, roomUserCount } =
-      await this.chatService.joinRoom(payload.roomId, user.userId);
-
-    this.removeUserSocket(user.userId, payload.roomId);
-    this.addUserSocket(user.userId, client.id, payload.roomId);
-    client.join(payload.roomId.toString());
-    
-    // 방 전체에 입장 메시지 전송
-    this.server.to(payload.roomId.toString()).emit('systemMessage', {
-      msg: `${user.username} 님이 입장했습니다.`,
-      roomUsers,
-      roomUserCount,
-    });
   }
 
   @SubscribeMessage('leaveRoom')
   async handleLeaveRoom(client: Socket, payload: { roomId: number }) {
-    const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-    const sessionId = cookieHeader
-      ?.split('; ')
-      .find(c => c.startsWith('SESSIONID='))
-      ?.split('=')[1];
+    try {
+      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
+      const sessionId = cookieHeader
+        ?.split('; ')
+        .find(c => c.startsWith('SESSIONID='))
+        ?.split('=')[1];
+  
+      if (!sessionId) {
+        console.warn('세션이 존재하지 않습니다.');
+        client.disconnect();
+        return;
+      }
+  
+      const user = await this.redisService.getSession(sessionId);
+      if (!user) {
+        console.warn('사용자가 존재하지 않습니다.');
+        client.disconnect();
+        return;
+      }
+  
+      const { roomUsers, roomUserCount } =
+        await this.chatService.leaveRoom(payload.roomId, user.userId);
 
-      console.log("why",payload, sessionId);
-
-    if (!sessionId) {
-      console.warn('세션이 존재하지 않습니다.');
+      client.leave(payload.roomId.toString());
+  
+      // 방 전체에 퇴장 메시지 전송
+      this.server.to(payload.roomId.toString()).emit('systemMessage', {
+        msg: `${user.username} 님이 퇴장했습니다.`,
+        roomUsers,
+        roomUserCount,
+      });
+    } catch (err) {
+      console.log(err.message);
       client.disconnect();
-      return;
     }
-
-    const user = await this.redisService.getSession(sessionId);
-    if (!user) {
-      console.warn('사용자가 존재하지 않습니다.');
-      client.disconnect();
-      return;
-    }
-
-    const { roomUsers, roomUserCount } =
-      await this.chatService.leaveRoom(payload.roomId, user.userId);
-
-    client.leave(payload.roomId.toString());
-
-    // 방 전체에 퇴장 메시지 전송
-    this.server.to(payload.roomId.toString()).emit('systemMessage', {
-      msg: `${user.username} 님이 퇴장했습니다.`,
-      roomUsers,
-      roomUserCount,
-    });
   }
 
   // EventEmitter 이벤트(@OnEvent) 방식
@@ -184,7 +191,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleUpdateRoom(payload: { roomId: number, room: number }) {
     const { roomId, room } = payload;
 
-    console.log(roomId, room);
     this.server.to(roomId.toString()).emit('roomUpdated', {
       msg: '방 정보가 변경되었습니다.',
       room,

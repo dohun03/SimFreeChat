@@ -5,7 +5,7 @@ import { renderProfile } from './profile.js';
 import { renderCreateRoom } from './createRoom.js';
 import { renderEditRoom } from './editRoom.js';
 import { renderRoomsList } from './rooms.js';
-import { leaveChatRoom, renderChatRoom } from './chat.js';
+import { renderChatRoom, leaveChatRoom } from './chat.js';
 
 // XSS 방지 함수
 export function escapeHtml(str) {
@@ -57,6 +57,9 @@ async function router() {
       renderChatRoom(app, user, roomId);
       break;
     }
+    case path === '/error':
+      error(app);
+      break;
     case path === '/':
       renderRoomsList(app);
       break;

@@ -16,11 +16,8 @@ export class Room {
   @Column({ type: 'int', default: 10, name: 'max_members' })
   maxMembers: number;
 
-  // @Column({ default: false, name: 'is_private' })
-  // isPrivate: boolean;
-
-  @Column({ nullable: true })
-  password: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  password: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

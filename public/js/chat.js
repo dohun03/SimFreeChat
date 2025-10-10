@@ -12,7 +12,7 @@ export async function renderChatRoom(container, user, roomId) {
   currentRoomId = roomId;
 
   // 시스템 알림 함수
-  function showSystemAlert(message) {
+  function showSystemMessage(message) {
     const systemContainer = document.getElementById('system-alerts');
     if (!systemContainer) return;
 
@@ -35,6 +35,16 @@ export async function renderChatRoom(container, user, roomId) {
       alert.classList.remove('show');
       setTimeout(() => alert.remove(), 300);
     }, 2000);
+  }
+
+  function showErrorMessage(message) {
+    container.innerHTML = `
+    <div class="alert alert-danger d-flex align-items-center mt-4" role="alert">
+      <div>
+        ${escapeHtml(message)}
+      </div>
+    </div>
+    `;
   }
 
   try {
@@ -88,7 +98,6 @@ export async function renderChatRoom(container, user, roomId) {
         <button type="button" id="chat-submit" class="btn btn-outline-primary align-self-start">Submit</button>
         <button type="button" id="chat-reset" class="btn btn-outline-danger align-self-start">Reset</button>
       </div>
-    
     `;
 
     const roomName = document.getElementById('room-name');
@@ -109,22 +118,31 @@ export async function renderChatRoom(container, user, roomId) {
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     });
-    socket.emit('joinRoom', { roomId });
 
+    if (room.currentMembers>=room.maxMembers) {
+      showErrorMessage('방의 인원이 가득 찼습니다.');
+      return;
+    }
+
+    if (room.password) {
+      const password = prompt('비밀번호를 입력하세요');
+      if (!password) {
+        showErrorMessage('비밀번호를 입력하세요.');
+        return;
+      }
+      socket.emit('joinRoom', { roomId, password });
+    } else {
+      socket.emit('joinRoom', { roomId });
+    }
+    
     // [강제 연결 끊김 Event]
     socket.on('forcedDisconnect', data => {
-      container.innerHTML = `
-      <div class="alert alert-danger d-flex align-items-center mt-4" role="alert">
-        <div>
-          ${escapeHtml(data.msg)}
-        </div>
-      </div>
-    `;
+      showErrorMessage(data.msg);
     });
 
     // [방 수정 Event]
     socket.on('roomUpdated', data => {
-      showSystemAlert(data.msg);
+      showSystemMessage(data.msg);
       roomName.textContent = data.room.name;
       maxCount.textContent = data.room.maxMembers;
     });
@@ -132,7 +150,7 @@ export async function renderChatRoom(container, user, roomId) {
     // [공용 UI 소켓 Event]
     socket.on('systemMessage', data => {
       // 입/퇴장 메시지 표시
-      showSystemAlert(data.msg);
+      showSystemMessage(data.msg);
 
       // 접속 유저 표시
       userList.innerHTML = '';
