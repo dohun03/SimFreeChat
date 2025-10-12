@@ -4,8 +4,8 @@ import { IsString, IsOptional, IsBoolean, IsInt, Min, Max, IsNotEmpty, Matches }
 export class CreateRoomDto {
   @IsNotEmpty({ message: '방 제목을 입력해주세요.' })
   @IsString()
-  @Matches(/^(?:[가-힣0-9 ]{2,12}|[a-zA-Z0-9 ]{2,12})$/, {
-    message: '제목은 한글/숫자 조합(2~12자) 또는 영문/숫자 조합(2~12자)만 가능합니다.',
+  @Matches(/^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9 _!@#$%^&*()\-+=~]{2,30}$/, {
+    message: '제목은 2~30자 이내의 한글, 자모, 영문, 숫자 및 일부 특수문자만 사용할 수 있습니다.',
   })
   name: string;
 
