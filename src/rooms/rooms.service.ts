@@ -16,7 +16,7 @@ export class RoomsService {
   ) {}
 
   // 방 생성
-  async createRoom(sessionId: string, createRoomDto: CreateRoomDto): Promise<Room> {
+  async createRoom(sessionId: string, createRoomDto: CreateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
     const { name, maxMembers, password } = createRoomDto;
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
@@ -30,12 +30,16 @@ export class RoomsService {
       maxMembers,
       password: hashedPassword,
     });
+    const savedRoom = await this.roomRepository.save(room);
 
-    return await this.roomRepository.save(room);
+    return {
+      ...savedRoom,
+      password: !!savedRoom.password,
+    };
   }
 
   // 방 수정
-  async updateRoom(roomId: number, sessionId: string, updateRoomDto: UpdateRoomDto): Promise<any> {
+  async updateRoom(roomId: number, sessionId: string, updateRoomDto: UpdateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
     const { name, maxMembers, password } = updateRoomDto;
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
@@ -55,11 +59,8 @@ export class RoomsService {
     const updatedRoom = await this.roomRepository.save(room);
 
     return {
-      id: updatedRoom.id,
-      name: updatedRoom.name,
-      maxMembers: updatedRoom.maxMembers,
-      password: updatedRoom.password ? true : false,
-      updatedAt: updatedRoom.updatedAt,
+      ...updatedRoom,
+      password: !!updatedRoom.password,
     }
   }
 
@@ -91,7 +92,7 @@ export class RoomsService {
           name: room.name,
           currentMembers: roomUserCount,
           maxMembers: room.maxMembers,
-          password: room.password ? true : false,
+          password: !!room.password,
           createdAt: room.createdAt,
           updatedAt: room.updatedAt,
           owner: {
@@ -118,7 +119,7 @@ export class RoomsService {
       name: room.name,
       currentMembers: roomUserCount,
       maxMembers: room.maxMembers,
-      password: room.password ? true : false,
+      password: !!room.password,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       owner: {

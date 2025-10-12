@@ -42,14 +42,17 @@ export class UsersService {
   }
 
   // 본인 프로필 불러오기
-  async getMyProfile(sessionId: string): Promise<User | null> {
+  async getMyProfile(sessionId: string): Promise<Omit<User, 'password'>> {
     const session = await this.redisService.getSession(sessionId);
 
     const user = await this.userRepository.findOne({
       where: { id: session.userId }
     });
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
-    return user;
+    const { password, ...safeUser } = user;
+
+    return safeUser;
   }
 
   // 본인 프로필 수정하기
@@ -59,16 +62,12 @@ export class UsersService {
     const user = await this.userRepository.findOne({
       where: { id: session.userId }
     });
-
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
     // 닉네임 변경
     if (updateUserDto.username) {
       const existingUser = await this.userRepository.findOne({ where: { username: updateUserDto.username } });
-
-      if (existingUser) {
-        throw new BadRequestException('이미 존재하는 사용자입니다.');
-      }
+      if (existingUser) throw new BadRequestException('이미 존재하는 사용자입니다.');
 
       user.username = updateUserDto.username;
     }

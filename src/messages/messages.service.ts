@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -27,24 +27,13 @@ export class MessagesService {
       where: { id: savedMessage.id },
       relations: ['user']
     });
-
-    if (!message) {
-      throw new Error('메세지를 찾을 수 없습니다.');
-    }
+    if (!message) throw new NotFoundException('메세지를 찾을 수 없습니다.');
     
+    const { password, ip_address, ...safeUser } = message.user;
+
     return {
-      id: message.id,
-      content: message.content,
-      created_at: message.created_at,
-      updated_at: message.updated_at,
-      user: {
-        id: message.user.id,
-        username: message.user.username,
-        is_admin: message.user.is_admin,
-        is_banned: message.user.is_banned,
-        created_at: message.user.created_at,
-        updated_at: message.user.updated_at,
-      },
+      ...message,
+      user: safeUser,
     };
   }
 
@@ -54,19 +43,12 @@ export class MessagesService {
       relations: ['user']
     });
 
-    return messages.map((msg) => ({
-      id: msg.id,
-      content: msg.content,
-      created_at: msg.created_at,
-      updated_at: msg.updated_at,
-      user: {
-        id: msg.user.id,
-        username: msg.user.username,
-        is_admin: msg.user.is_admin,
-        is_banned: msg.user.is_banned,
-        created_at: msg.user.created_at,
-        updated_at: msg.user.updated_at,
-      },
-    }));
+    return messages.map((msg) => {
+      const { password, ip_address, ...safeUser } = msg.user;
+      return {
+        ...msg,
+        user: safeUser
+      }
+    });
   }
 }
