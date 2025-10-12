@@ -58,11 +58,12 @@ export async function renderChatRoom(container, user, roomId) {
       container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
-    
+    const isOwner = room.owner.id===user.id;
+
     container.innerHTML = `
       <div class="mt-3 hstack gap-3">
         <h3 id="room-name" class="mb-3 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
-        <button type="button" id="chat-edit" class="btn btn-sm btn-primary align-self-start ${room.owner.id===user.id ? '': 'd-none'}">수정</button>
+        <button type="button" id="chat-edit" class="btn btn-sm btn-primary align-self-start ${isOwner ? '' : 'd-none'}">수정</button>
       </div>
       <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
         <div class="flex-grow-1 position-relative">
@@ -124,7 +125,7 @@ export async function renderChatRoom(container, user, roomId) {
       return;
     }
 
-    if (room.password) {
+    if (room.password && !isOwner) {
       const password = prompt('비밀번호를 입력하세요');
       if (!password) {
         showErrorMessage('비밀번호를 입력하세요.');
@@ -134,6 +135,36 @@ export async function renderChatRoom(container, user, roomId) {
     } else {
       socket.emit('joinRoom', { roomId });
     }
+
+    // // 1. 소켓 초기화 직후에 이벤트 추가
+    // socket.on('disconnect', (reason) => {
+    //   console.log('서버 연결 끊김:', reason);
+    //   showSystemMessage('서버와의 연결이 끊어졌습니다. 재연결 시도 중...');
+    //   attemptReconnect();
+    // });
+
+    // socket.on('connect_error', (err) => {
+    //   console.log('연결 에러:', err);
+    //   showSystemMessage('서버 연결 오류. 재연결 시도 중...');
+    //   attemptReconnect();
+    // });
+
+    // // 2. 재연결 함수
+    // function attemptReconnect() {
+    //   if (socket && !socket.connected) {
+    //     console.log('재연결 시도...');
+    //     socket.connect();
+    //   }
+    // }
+
+    // // 3. 브라우저 탭 활성화 감지
+    // document.addEventListener('visibilitychange', () => {
+    //   if (document.visibilityState === 'visible' && socket && !socket.connected) {
+    //     console.log('탭 활성화 - 소켓 재연결 시도...');
+    //     showSystemMessage('채팅 탭이 활성화되었습니다. 서버와 재연결 중...');
+    //     socket.connect();
+    //   }
+    // });
     
     // [강제 연결 끊김 Event]
     socket.on('forcedDisconnect', data => {
@@ -151,18 +182,69 @@ export async function renderChatRoom(container, user, roomId) {
     socket.on('systemMessage', data => {
       // 입/퇴장 메시지 표시
       showSystemMessage(data.msg);
-
+    
       // 접속 유저 표시
       userList.innerHTML = '';
       data.roomUsers.forEach(u => {
         const li = document.createElement('li');
-        li.textContent = u.username;
-        li.classList.add('list-group-item','list-group-item-primary');
+        li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center', 'list-group-item-primary');
+    
+        // 유저 이름
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = u.username;
+    
+        // 방장일 경우
+        if (room.owner.id === u.id) {
+          const badge = document.createElement('span');
+          badge.className = 'badge bg-danger ms-2';
+          badge.textContent = '방장';
+          nameSpan.appendChild(badge);
+        }
+    
+        // 드롭다운 메뉴
+        const dropdownDiv = document.createElement('div');
+        dropdownDiv.className = 'dropdown';
+        const dropdownBtn = document.createElement('button');
+        dropdownBtn.className = 'btn p-0 border-0 bg-transparent shadow-none';
+        dropdownBtn.type = 'button';
+        dropdownBtn.setAttribute('data-bs-toggle', 'dropdown');
+        dropdownBtn.setAttribute('aria-expanded', 'false');
+        dropdownBtn.innerHTML = `<i class="bi bi-three-dots-vertical text-secondary"></i>`;
+        const dropdownMenu = document.createElement('ul');
+        dropdownMenu.className = 'dropdown-menu dropdown-menu-end';
+        dropdownMenu.innerHTML = `
+          <li><button class="dropdown-item user-info-btn" data-id="${u.id}">정보</button></li>
+          ${isOwner && room.owner.id!=u.id?
+          `<li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>` : ''}
+        `;
+        
+        dropdownDiv.appendChild(dropdownBtn);
+        dropdownDiv.appendChild(dropdownMenu);
+    
+        li.appendChild(nameSpan);
+        li.appendChild(dropdownDiv);
         userList.appendChild(li);
       });
-
+    
       // 접속 인원수 표시
       currentCount.textContent = data.roomUserCount;
+
+      userList.querySelectorAll('.kick-user-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const targetId = e.target.dataset.id;
+          if (confirm('정말 이 사용자를 강퇴하시겠습니까?')) {
+            socket.emit('kickUser', { roomId, userId: Number(targetId) });
+          }
+        });
+      });
+
+      // userList.querySelectorAll('.user-info-btn').forEach(btn => {
+      //   btn.addEventListener('click', e => {
+      //     const targetId = e.target.dataset.id;
+      //     showSystemMessage(`유저 ID: ${targetId}`);
+      //   });
+      // });
     });
 
     // [새 채팅 메시지 출력 Event]

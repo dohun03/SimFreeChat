@@ -17,8 +17,8 @@ import { map } from 'rxjs';
     origin: 'http://localhost:3000',
     credentials: true,
   },
-  pingInterval: 60000 * 5,  // 5분마다 ping
-  pingTimeout: 60000 * 15,   // 15분 동안 pong 없으면 연결 끊음
+  pingInterval: 60000 * 1,  // 5분마다 ping
+  pingTimeout: 60000 * 1,   // 15분 동안 pong 없으면 연결 끊음
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -67,7 +67,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   // 강제 소켓 삭제 메서드
-  removeUserSocket(userId: number, roomId: number) {
+  removeUserSocket(roomId: number, userId: number) {
     const socketMap = this.userSockets.get(userId);
     if (!socketMap) return;
 
@@ -115,14 +115,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
       
-      // 방 전체에 입장 메시지 전송
       const { roomUsers, afterCount } = await this.chatService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
-      this.removeUserSocket(user.userId, roomId);
+      this.removeUserSocket(roomId, user.userId);
       this.addUserSocket(user.userId, client.id, roomId);
       client.join(roomId.toString());
   
+      // 방 전체에 입장 메시지 전송
       this.server.to(roomId.toString()).emit('systemMessage', {
         msg: `${user.username} 님이 입장했습니다.`,
         roomUsers,
@@ -156,8 +156,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
   
-      const { roomUsers, roomUserCount } =
-        await this.chatService.leaveRoom(payload.roomId, user.userId);
+      const { roomUsers, roomUserCount } = await this.chatService.leaveRoom(payload.roomId, user.userId);
 
       client.leave(payload.roomId.toString());
   
@@ -178,7 +177,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
     const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
-    this.removeUserSocket(roomUsers.id , roomId);
+    this.removeUserSocket(roomId, roomUsers.id);
 
     this.server.to(roomId.toString()).emit('systemMessage', {
       msg: `${deletedUser.username} 님이 퇴장했습니다.`,
@@ -200,16 +199,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @OnEvent('deleteRoom')
   async handleDeleteRoom(payload: { roomId: number, userId: number }) {
     const { roomId, userId } = payload;
-    
-    this.removeUserSocket(userId , roomId);
-
     const userSocket = this.userSockets.get(userId);
     if (!userSocket) {
       console.log('소켓 아이디가 없습니다.');
       return;
     }
-
     const [socketId] = userSocket.keys();
+
+    this.removeUserSocket(roomId, userId);
 
     // 특정 사용자에게만 메시지 전송
     this.server.to(socketId).emit('systemMessage', {
@@ -247,5 +244,49 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     this.server.to(payload.roomId.toString()).emit('chatMessage', message);
+  }
+
+  @SubscribeMessage('kickUser')
+  async handleKickuser(client: Socket, payload: { roomId: number, userId: number }) {
+    try {
+      const { roomId, userId } = payload;
+      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
+      const sessionId = cookieHeader
+        ?.split('; ')
+        .find(c => c.startsWith('SESSIONID='))
+        ?.split('=')[1];
+  
+      if (!sessionId) {
+        console.warn('세션이 존재하지 않습니다.');
+        client.disconnect();
+        return;
+      }
+  
+      const owner = await this.redisService.getSession(sessionId);
+      if (!owner) {
+        console.warn('사용자가 존재하지 않습니다.');
+        client.disconnect();
+        return;
+      }
+
+      this.server.sockets.sockets.forEach((socket, id) => {
+        console.log("소켓 아이디1:",id,"and",this.userSockets);
+      });
+
+      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
+      this.removeUserSocket(roomId, userId);
+
+      this.server.sockets.sockets.forEach((socket, id) => {
+        console.log("소켓 아이디2:",id,"and",this.userSockets);
+      });
+
+      this.server.to(roomId.toString()).emit('systemMessage', {
+        msg: `${kickedUser.username} 님을 퇴장시켰습니다.`,
+        roomUsers,
+        roomUserCount,
+      });
+    } catch (err) {
+      console.log(err.message);
+    }
   }
 }

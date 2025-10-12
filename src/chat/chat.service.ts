@@ -18,14 +18,14 @@ export class ChatService {
     private readonly chatEvents: ChatEvents,
   ) {}
 
-  async joinRoom(roomId: number, userId: number, password: any) {
+  async joinRoom(roomId: number, userId: number, password: string) {
     const room = await this.roomRepository.findOne({ where: { id: roomId } });
     if (!room) throw new BadRequestException('존재하지 않는 방입니다.');
 
     const beforeCount = await this.redisService.getRoomUserCount(roomId);
     if (beforeCount>=room.maxMembers) throw new BadRequestException('방의 인원이 가득 찼습니다.');
     
-    if (room.password) {
+    if (room.password && room.owner.id!=userId) {
       const isPasswordValid = await bcrypt.compare(password, room.password);
       if (!isPasswordValid) throw new BadRequestException('비밀번호가 일치하지 않습니다.');
     }
@@ -39,7 +39,7 @@ export class ChatService {
       select: ['id','username']
     });
 
-    return { roomUsers, afterCount }
+    return { roomUsers, afterCount };
   }
 
   async leaveRoom(roomId: number, userId: number) {
@@ -47,15 +47,15 @@ export class ChatService {
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
 
     await this.redisService.removeUserFromRoom(roomId, userId);
+
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     const roomUsers = await this.userRepository.find({
       where: { id: In(roomUsersArray.map(userId => Number(userId))) },
       select: ['id','username']
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
-    console.log('룸유저카운트',roomUserCount);
 
-    return { roomUsers, roomUserCount }
+    return { roomUsers, roomUserCount };
   }
 
   async leaveAllRooms(sessionId: string) {
@@ -77,12 +77,10 @@ export class ChatService {
         await this.redisService.removeUserFromRoom(roomId, session.userId);
 
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
-
         const roomUsers = await this.userRepository.find({
           where: { id: In(roomUsersArray.map(userId => Number(userId))) },
           select: ['id','username']
         });
-
         const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
         this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, session);
@@ -102,6 +100,36 @@ export class ChatService {
         this.chatEvents.deleteRoom(roomId, Number(userId));
       })
     );
+  }
+
+  async kickUser(roomId: number, userId: number, owner: any) {
+    const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
+    if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
+
+    const isOwner = await this.roomRepository.findOne({
+      where: {
+        id: roomId,
+        owner: owner.userId
+      }
+    });
+    if (!isOwner) throw new BadRequestException('권한이 없습니다');
+
+    await this.redisService.removeUserFromRoom(roomId, userId);
+
+    const kickedUser = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'username']
+    });
+    if (!kickedUser) throw new BadRequestException('해당 유저가 없습니다.');
+    
+    const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+    const roomUsers = await this.userRepository.find({
+      where: { id: In(roomUsersArray.map(userId => Number(userId))) },
+      select: ['id','username']
+    });
+    const roomUserCount = await this.redisService.getRoomUserCount(roomId);
+
+    return { roomUsers, roomUserCount, kickedUser };
   }
 
   async listRoomUsers(roomId: number) {
