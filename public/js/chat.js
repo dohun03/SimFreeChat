@@ -1,4 +1,4 @@
-import { escapeHtml } from './app.js'
+import { escapeHtml, formatDate } from './app.js'
 
 let socket = null;
 let currentRoomId = null;
@@ -249,10 +249,7 @@ export async function renderChatRoom(container, user, roomId) {
 
     // [새 채팅 메시지 출력 Event]
     socket.on('chatMessage', data => {
-      const createdAt = new Date().toLocaleString('ko-KR', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit'
-      });
+      const createdAt = formatDate(data.created_at);
 
       const li = document.createElement('li');
       li.classList.add('list-group-item');
@@ -280,10 +277,7 @@ export async function renderChatRoom(container, user, roomId) {
     const messages = await MessagesResponse.json();
 
     messages.forEach(msg => {
-      const createdAt = new Date(msg.created_at).toLocaleString('ko-KR', {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit'
-      });
+      const createdAt = formatDate(msg.created_at);
 
       const li = document.createElement('li');
       li.classList.add('list-group-item');

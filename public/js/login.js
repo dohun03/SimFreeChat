@@ -1,4 +1,9 @@
-export function renderLogin(container) {
+export function renderLogin(container, user) {
+  if (user) {
+    container.innerHTML = `<h2 class="text-center mt-5">이미 로그인 되어있습니다.</h2>`;
+    return;
+  }
+
   container.innerHTML = `
     <div class="card p-4 mx-auto" style="max-width: 400px;">
       <h2>로그인</h2>

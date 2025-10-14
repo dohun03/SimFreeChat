@@ -18,6 +18,15 @@ export function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+// 날짜 포맷 함수
+export function formatDate(date) {
+  if (!date) return '';
+  return new Date(date).toLocaleString('ko-KR', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 // 창 닫기, 새로고침, 페이지 이동 시 발생
 window.addEventListener('beforeunload', () => {
   leaveChatRoom();
@@ -36,13 +45,13 @@ async function router() {
 
   switch (true) {
     case path === '/login':
-      renderLogin(app);
+      renderLogin(app, user);
       break;
     case path === '/register':
-      renderRegister(app);
+      renderRegister(app, user);
       break;
     case path === '/profile':
-      renderProfile(app);
+      renderProfile(app, user);
       break;
     case path === '/create-room':
       renderCreateRoom(app, user);
