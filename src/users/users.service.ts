@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -18,12 +18,10 @@ export class UsersService {
   //회원가입
   async createUser(createUserDto: CreateUserDto) {
     const { username, password, email } = createUserDto;
-  
-    const existingUser = await this.userRepository.findOne({ where: { username } });
-  
-    if (existingUser) {
-      throw new BadRequestException('이미 존재하는 사용자입니다.');
-    }
+    const existingUser = await this.userRepository.findOne({
+      where: [{ username }, { email }] // OR 조건문
+    });
+    if (existingUser) throw new BadRequestException('이미 존재하는 사용자명 또는 이메일입니다.');
   
     const hashedPassword = await bcrypt.hash(password, 10);
   
@@ -36,14 +34,15 @@ export class UsersService {
     try {
       await this.userRepository.save(newUser);
     } catch (err) {
-      console.error('DB 저장 중 에러 발생:', err);
-      throw err;
+      console.error('DB 저장 에러:', err);
+      throw new InternalServerErrorException('사용자 생성 중 문제가 발생했습니다.');
     }
   }
 
   // 본인 프로필 불러오기
   async getMyProfile(sessionId: string): Promise<Omit<User, 'password'>> {
     const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: session.userId }
@@ -58,6 +57,7 @@ export class UsersService {
   // 본인 프로필 수정하기
   async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto) {
     const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: session.userId }
@@ -66,27 +66,39 @@ export class UsersService {
 
     // 닉네임 변경
     if (updateUserDto.username) {
-      const existingUser = await this.userRepository.findOne({ where: { username: updateUserDto.username } });
-      if (existingUser) throw new BadRequestException('이미 존재하는 사용자입니다.');
+      const existingUser = await this.userRepository.findOne({
+        where: { username: updateUserDto.username },
+      });
+      if (existingUser) throw new BadRequestException('이미 존재하는 사용자명입니다.');
 
       user.username = updateUserDto.username;
     }
 
     // 비밀번호 변경
     if (updateUserDto.password) {
-      const hashedPassword = await bcrypt.hash(updateUserDto.password, 10);
-      user.password = hashedPassword;
+      const isSame = await bcrypt.compare(updateUserDto.password, user.password);
+      if (isSame) throw new BadRequestException('이전과 동일한 비밀번호입니다.');
+
+      user.password = await bcrypt.hash(updateUserDto.password, 10);
     }
 
     // 이메일 변경
     if (updateUserDto.email) {
+      const existingUser = await this.userRepository.findOne({
+        where: { email: updateUserDto.email },
+      });
+      if (existingUser) throw new BadRequestException('이미 사용 중인 이메일입니다.');
+
       user.email = updateUserDto.email;
     }
 
-    await this.userRepository.save(user);
-    
-    const { password, ...safeUser } = user;
-    
-    return safeUser;
+    try {
+      await this.userRepository.save(user);
+      const { password, ...safeUser } = user;
+      return safeUser;
+    } catch (err) {
+      console.error('DB 저장 에러:', err);
+      throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
+    }
   }
 }

@@ -37,6 +37,7 @@ export function renderRegister(container) {
       });
       const data = await res.json();
       if (res.ok) {
+        alert(data.message);
         location.hash = '#/login';
       } else {
         errorMessage.innerText = data.message || '회원가입 실패';

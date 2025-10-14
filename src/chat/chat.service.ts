@@ -112,7 +112,7 @@ export class ChatService {
         owner: owner.userId
       }
     });
-    if (!isOwner) throw new BadRequestException('권한이 없습니다');
+    if (!isOwner) throw new UnauthorizedException('권한이 없습니다');
 
     await this.redisService.removeUserFromRoom(roomId, userId);
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -20,27 +20,29 @@ export class MessagesService {
       user: { id: userId },
       content
     });
+    try {
+      const savedMessage = await this.messageRepository.save(newMessage);
 
-    const savedMessage = await this.messageRepository.save(newMessage);
-
-    const message = await this.messageRepository.findOne({
-      where: { id: savedMessage.id },
-      relations: ['user']
-    });
-    if (!message) throw new NotFoundException('메세지를 찾을 수 없습니다.');
-    
-    const { password, ip_address, ...safeUser } = message.user;
-
-    return {
-      ...message,
-      user: safeUser,
-    };
+      const message = await this.messageRepository.findOne({
+        where: { id: savedMessage.id },
+      });
+      if (!message) throw new NotFoundException('메세지를 찾을 수 없습니다.');
+      
+      const { password, ip_address, ...safeUser } = message.user;
+  
+      return {
+        ...message,
+        user: safeUser,
+      };
+    } catch (err) {
+      console.error('DB 삭제 에러:', err);
+      throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
+    }
   }
 
   async getMessagesByRoom(roomId: number): Promise<ResponseMessageDto[]> {
     const messages = await this.messageRepository.find({
-      where: { room: { id: roomId} },
-      relations: ['user']
+      where: { room: { id: roomId } },
     });
 
     return messages.map((msg) => {

@@ -13,8 +13,8 @@ export async function renderEditRoom(container, user, roomId) {
       credentials: 'include',
     });
     const room = await roomResponse.json();
-    if (!roomResponse.ok) {
-      container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
+    if (!roomResponse.ok || room.owner.id!=user.id) {
+      container.textContent = room.message || '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
 
@@ -31,7 +31,7 @@ export async function renderEditRoom(container, user, roomId) {
           <!-- 최대인원 -->
           <div class="mb-3">
             <label for="maxMembers" class="form-label">최대인원</label>
-            <input type="text" class="form-control form-control-sm" id="maxMembers" placeholder="최대 인원 입력" min="2" max="50" value="${escapeHtml(room.maxMembers)}">
+            <input type="number" class="form-control form-control-sm" id="maxMembers" placeholder="최대 인원 입력" min="2" max="50" value="${escapeHtml(room.maxMembers)}">
           </div>
 
           <!-- 비밀번호 -->
@@ -81,7 +81,7 @@ export async function renderEditRoom(container, user, roomId) {
         const data = await res.json();
 
         if (!res.ok) {
-          errorMessage.innerText = '방 수정 실패:\n' + data.message.join('\n');
+          errorMessage.innerText = '방 수정 실패:\n' + data.message
           return;
         }
 

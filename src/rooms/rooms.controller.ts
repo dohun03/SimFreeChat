@@ -27,16 +27,16 @@ export class RoomsController {
   @Patch('/:roomId')
   async update(
     @Param('roomId', ParseIntPipe) roomId: number,
-    @Body() editRoomDto: UpdateRoomDto,
+    @Body() updateRoomDto: UpdateRoomDto,
     @Req() req: any
   ) {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
     
-    const room = await this.roomsService.updateRoom(roomId, sessionId, editRoomDto);
+    const room = await this.roomsService.updateRoom(roomId, sessionId, updateRoomDto);
     this.chatService.updateRoom(roomId, room);
 
-    return { id: room.id };
+    return room;
   }
 
   // 방 삭제

@@ -12,7 +12,7 @@ export class Message {
   @Index()
   room: Room;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { onDelete: 'CASCADE', eager: true })
   @JoinColumn({ name: 'user_id' })
   user: User;
 

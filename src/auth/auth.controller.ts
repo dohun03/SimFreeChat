@@ -30,11 +30,11 @@ export class AuthController {
       sameSite: 'lax'
     });
   
-    return safeUser; // 자동으로 200 코드 반환.
+    return safeUser;
   }
 
   @Post('logout')
-  async logOut(@Req() req: any, @Res() res: Response) {
+  async logOut(@Req() req: any, @Res({ passthrough: true }) res: Response) {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
@@ -46,6 +46,6 @@ export class AuthController {
       sameSite: 'lax',
     });
     
-    return res.json({ message: '로그아웃' });
+    return { message: '로그아웃' };
   }
 }

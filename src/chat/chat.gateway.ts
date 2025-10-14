@@ -11,14 +11,15 @@ import { ChatService } from './chat.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MessagesService } from 'src/messages/messages.service';
 import { map } from 'rxjs';
+import { UnauthorizedException } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
     origin: 'http://localhost:3000',
     credentials: true,
   },
-  pingInterval: 60000 * 1,  // 5분마다 ping
-  pingTimeout: 60000 * 1,   // 15분 동안 pong 없으면 연결 끊음
+  pingInterval: 60000 * 5,  // 5분마다 ping
+  pingTimeout: 60000 * 15,   // 15분 동안 pong 없으면 연결 끊음
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -33,21 +34,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
   
   handleConnection(client: Socket) {
-    console.log(`WEBSOCKET CONNECT: ${client.id}`);
-    // this.server.sockets.sockets.forEach((socket, id) => {
-    //   console.log("소켓 아이디:",id);
-    // });
+    console.log(`[CONNECT] ${client.id} - ${client.handshake.address}`);
   }
 
   handleDisconnect(client: Socket) {
     // 자동으로 소켓 제거된 시점
-    console.log(`WEBSOCKET DISCONNECT: ${client.id}`);
+    console.log(`[DISCONNECT] ${client.id}`);
     // userSockets에서 해당 소켓 제거
     for (const [userId, socketMap] of this.userSockets.entries()) {
       if (socketMap.has(client.id)) {
         socketMap.delete(client.id);
         if (socketMap.size === 0) {
           this.userSockets.delete(userId);
+          console.log(`[SOCKET REMOVED] userId=${userId}`);
         }
         break;
       }
@@ -60,10 +59,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.userSockets.set(userId, new Map());
     }
     this.userSockets.get(userId)!.set(socketId, roomId);
-
-    // this.server.sockets.sockets.forEach((socket, id) => {
-    //   console.log("추가 후 소켓들:",id);
-    // });
   }
 
   // 강제 소켓 삭제 메서드
@@ -91,30 +86,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  // 쿠키 파싱 후 세션 확인용 메서드
+  private async getUserFromSession(client: Socket) {
+    const cookieHeader = client.handshake.headers.cookie;
+    const sessionId = cookieHeader
+      ?.split('; ')
+      .find(c => c.startsWith('SESSIONID='))
+      ?.split('=')[1];
+  
+    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+  
+    const user = await this.redisService.getSession(sessionId);
+    if (!user) throw new UnauthorizedException('세션 정보가 없습니다.');
+  
+    return user;
+  }
+
+  
   // WebSocket 이벤트(@SubscribeMessage) 방식
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(client: Socket, payload: { roomId: number, password: string }) {
     try {
+      const user = await this.getUserFromSession(client);
       const { roomId, password } = payload;
-      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-      const sessionId = cookieHeader
-        ?.split('; ')
-        .find(c => c.startsWith('SESSIONID='))
-        ?.split('=')[1];
-  
-      if (!sessionId) {
-        console.warn('세션이 존재하지 않습니다.');
-        client.disconnect();
-        return;
-      }
-  
-      const user = await this.redisService.getSession(sessionId);
-      if (!user) {
-        console.warn('세션에 유저 ID가 없습니다.');
-        client.disconnect();
-        return;
-      }
-      
       const { roomUsers, afterCount } = await this.chatService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
@@ -137,25 +131,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('leaveRoom')
   async handleLeaveRoom(client: Socket, payload: { roomId: number }) {
     try {
-      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-      const sessionId = cookieHeader
-        ?.split('; ')
-        .find(c => c.startsWith('SESSIONID='))
-        ?.split('=')[1];
-  
-      if (!sessionId) {
-        console.warn('세션이 존재하지 않습니다.');
-        client.disconnect();
-        return;
-      }
-  
-      const user = await this.redisService.getSession(sessionId);
-      if (!user) {
-        console.warn('사용자가 존재하지 않습니다.');
-        client.disconnect();
-        return;
-      }
-  
+      const user = await this.getUserFromSession(client);
       const { roomUsers, roomUserCount } = await this.chatService.leaveRoom(payload.roomId, user.userId);
 
       client.leave(payload.roomId.toString());
@@ -174,7 +150,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // EventEmitter 이벤트(@OnEvent) 방식
   @OnEvent('leaveAllRooms')
-  async handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
+  handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
     const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
     this.removeUserSocket(roomId, roomUsers.id);
@@ -187,7 +163,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @OnEvent('updateRoom')
-  async handleUpdateRoom(payload: { roomId: number, room: number }) {
+  handleUpdateRoom(payload: { roomId: number, room: number }) {
     const { roomId, room } = payload;
 
     this.server.to(roomId.toString()).emit('roomUpdated', {
@@ -197,7 +173,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @OnEvent('deleteRoom')
-  async handleDeleteRoom(payload: { roomId: number, userId: number }) {
+  handleDeleteRoom(payload: { roomId: number, userId: number }) {
     const { roomId, userId } = payload;
     const userSocket = this.userSockets.get(userId);
     if (!userSocket) {
@@ -218,67 +194,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('sendMessage')
   async handleSendMessage(client: Socket, payload: { roomId: number, content: string}) {
-    const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-    const sessionId = cookieHeader
-      ?.split('; ')
-      .find(c => c.startsWith('SESSIONID='))
-      ?.split('=')[1];
-
-    if (!sessionId) {
-      console.warn('세션이 존재하지 않습니다.');
-      client.disconnect();
-      return;
+    try {
+      const user = await this.getUserFromSession(client);
+      const message = await this.messagesService.createMessage({
+        roomId: payload.roomId, 
+        userId: user.userId, 
+        content: payload.content
+      });
+  
+      this.server.to(payload.roomId.toString()).emit('chatMessage', message);
+    } catch (err) {
+      console.log(err.message);
     }
-
-    const user = await this.redisService.getSession(sessionId);
-    if (!user) {
-      console.warn('사용자가 존재하지 않습니다.');
-      client.disconnect();
-      return;
-    }
-
-    const message = await this.messagesService.createMessage({
-      roomId: payload.roomId, 
-      userId: user.userId, 
-      content: payload.content
-    });
-
-    this.server.to(payload.roomId.toString()).emit('chatMessage', message);
   }
 
   @SubscribeMessage('kickUser')
   async handleKickuser(client: Socket, payload: { roomId: number, userId: number }) {
     try {
+      const owner = await this.getUserFromSession(client);
       const { roomId, userId } = payload;
-      const cookieHeader = client.handshake.headers.cookie; // 쿠키 추출
-      const sessionId = cookieHeader
-        ?.split('; ')
-        .find(c => c.startsWith('SESSIONID='))
-        ?.split('=')[1];
-  
-      if (!sessionId) {
-        console.warn('세션이 존재하지 않습니다.');
-        client.disconnect();
-        return;
-      }
-  
-      const owner = await this.redisService.getSession(sessionId);
-      if (!owner) {
-        console.warn('사용자가 존재하지 않습니다.');
-        client.disconnect();
-        return;
-      }
-
-      this.server.sockets.sockets.forEach((socket, id) => {
-        console.log("소켓 아이디1:",id,"and",this.userSockets);
-      });
-
       const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
       this.removeUserSocket(roomId, userId);
-
-      this.server.sockets.sockets.forEach((socket, id) => {
-        console.log("소켓 아이디2:",id,"and",this.userSockets);
-      });
 
       this.server.to(roomId.toString()).emit('systemMessage', {
         msg: `${kickedUser.username} 님을 퇴장시켰습니다.`,
