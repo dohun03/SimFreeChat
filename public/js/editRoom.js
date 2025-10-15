@@ -44,7 +44,7 @@ export async function renderEditRoom(container, user, roomId) {
             <button type="submit" class="btn btn-primary flex-fill btn-sm">저장</button>
             <button type="button" class="btn btn-danger flex-fill btn-sm" id="delete-btn">삭제</button>
           </div>
-          <p id="register-msg" class="text-danger mt-2"></p>
+          <p id="result-msg" class="text-danger mt-2"></p>
         </form>
       </div>
     `;
@@ -56,10 +56,10 @@ export async function renderEditRoom(container, user, roomId) {
       const name = document.getElementById('name').value.trim();
       const maxMembers = document.getElementById('maxMembers').value;
       const password = document.getElementById('password').value;
-      const errorMessage = document.getElementById('register-msg');
+      const resultMessage = document.getElementById('result-msg');
 
       if (!name || !maxMembers) {
-        errorMessage.innerText = '빈 칸을 입력하세요.';
+        resultMessage.innerText = '빈 칸을 입력하세요.';
         return;
       }
 
@@ -81,11 +81,11 @@ export async function renderEditRoom(container, user, roomId) {
         const data = await res.json();
 
         if (!res.ok) {
-          errorMessage.innerText = '방 수정 실패:\n' + data.message
+          resultMessage.innerText = '방 수정 실패:\n' + data.message
           return;
         }
 
-        location.hash = `#/room/${data.id}`;
+        resultMessage.innerText = '방 정보가 변경되었습니다.';
       } catch (err) {
         console.error(err);
       }
@@ -93,21 +93,23 @@ export async function renderEditRoom(container, user, roomId) {
 
     const deleteBtn = document.getElementById('delete-btn');
     deleteBtn.addEventListener('click', async () => {
-      try {
-        const res = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-          const err = await res.json();
-          errorMessage.innerText = '방 삭제 실패:\n' + err.message.join('\n');
+      if (confirm('정말 삭제하시겠습니까?')) {
+        try {
+          const res = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+            method: 'DELETE',
+          });
+          const data = await res.json();
+  
+          if (!res.ok) {
+            const err = await res.json();
+            resultMessage.innerText = '방 삭제 실패:\n' + err.message.join('\n');
+          }
+  
+          alert(data.message);
+          location.hash = `#/`;
+        } catch (err) {
+          console.error(err);
         }
-
-        alert(data.message);
-        location.hash = `#/`;
-      } catch (err) {
-        console.error(err);
       }
     });
   } catch (err) {

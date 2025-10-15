@@ -54,6 +54,20 @@ export class UsersService {
     return safeUser;
   }
 
+  // 특정 사용자 조회
+  async getUserById(userId: number) {
+    const user = await this.userRepository.findOne({
+      where: {
+        id: userId
+      }
+    });
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+
+    const { password, ...safeUser } = user;
+    
+    return safeUser;
+  }
+
   // 본인 프로필 수정하기
   async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto) {
     const session = await this.redisService.getSession(sessionId);

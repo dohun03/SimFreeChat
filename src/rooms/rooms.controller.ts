@@ -69,6 +69,6 @@ export class RoomsController {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
-    return this.roomsService.getRoom(sessionId, roomId);
+    return this.roomsService.getRoomById(sessionId, roomId);
   }
 }

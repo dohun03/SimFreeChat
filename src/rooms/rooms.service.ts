@@ -130,7 +130,7 @@ export class RoomsService {
   }
 
   // 방 하나 조회
-  async getRoom(sessionId: string, roomId: number) {
+  async getRoomById(sessionId: string, roomId: number) {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 

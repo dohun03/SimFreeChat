@@ -17,7 +17,6 @@ export function renderLogin(container, user) {
     </div>
   `;
 
-  const form = document.getElementById('login-form');
   document.querySelector('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('username').value;

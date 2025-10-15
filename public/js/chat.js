@@ -99,6 +99,26 @@ export async function renderChatRoom(container, user, roomId) {
         <button type="button" id="chat-submit" class="btn btn-outline-primary align-self-start">Submit</button>
         <button type="button" id="chat-reset" class="btn btn-outline-danger align-self-start">Reset</button>
       </div>
+
+      <!-- 유저 정보 모달 -->
+      <div class="modal fade" id="userInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">사용자 정보</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p><strong>아이디:</strong> <span id="modal-username"></span></p>
+              <p><strong>이메일:</strong> <span id="modal-email"></span></p>
+              <p><strong>가입일:</strong> <span id="modal-created"></span></p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+          </div>
+        </div>
+      </div>      
     `;
 
     const roomName = document.getElementById('room-name');
@@ -213,7 +233,7 @@ export async function renderChatRoom(container, user, roomId) {
         const dropdownMenu = document.createElement('ul');
         dropdownMenu.className = 'dropdown-menu dropdown-menu-end';
         dropdownMenu.innerHTML = `
-          <li><button class="dropdown-item user-info-btn" data-id="${u.id}">정보</button></li>
+          <li><button class="dropdown-item user-info-btn" data-id="${u.id}">사용자 정보</button></li>
           ${isOwner && room.owner.id!=u.id?
           `<li><hr class="dropdown-divider"></li>
           <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>` : ''}
@@ -239,12 +259,32 @@ export async function renderChatRoom(container, user, roomId) {
         });
       });
 
-      // userList.querySelectorAll('.user-info-btn').forEach(btn => {
-      //   btn.addEventListener('click', e => {
-      //     const targetId = e.target.dataset.id;
-      //     showSystemMessage(`유저 ID: ${targetId}`);
-      //   });
-      // });
+      userList.querySelectorAll('.user-info-btn').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          const targetId = Number(e.target.dataset.id);
+          try {
+            const res = await fetch(`/users/${encodeURIComponent(targetId)}`, { method: 'GET' });
+            if (!res.ok) throw new Error('유저 정보를 가져올 수 없습니다.');
+            const targetUser = await res.json();
+      
+            document.getElementById('modal-username').textContent = targetUser.username;
+            document.getElementById('modal-email').textContent = targetUser.email || '-';
+            document.getElementById('modal-created').textContent = formatDate(targetUser.created_at);
+      
+            const modalEl = document.getElementById('userInfoModal');
+            const modal = new bootstrap.Modal(document.getElementById('userInfoModal'));
+            modal.show();
+      
+            // 모달 닫히면 입력창 포커스
+            modalEl.addEventListener('hidden.bs.modal', () => {
+              chatInput.focus();
+            });
+          } catch (err) {
+            showSystemMessage(err.message);
+          }
+        });
+      });
+      
     });
 
     // [새 채팅 메시지 출력 Event]

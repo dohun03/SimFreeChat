@@ -35,7 +35,7 @@ export class MessagesService {
         user: safeUser,
       };
     } catch (err) {
-      console.error('DB 삭제 에러:', err);
+      console.error('DB 생성 에러:', err);
       throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
     }
   }

@@ -77,8 +77,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     for (const sId of deleteId) {
       const socket = this.server.sockets.sockets.get(sId);
       if (socket) {
-        socket.emit('forcedDisconnect', { 
-          msg: "새 탭에서 연결 됨",
+        socket.emit('forcedDisconnect', {
+          msg: "채팅방과 연결이 끊겼습니다.",
         });
         socket.disconnect(true);
         socketMap.delete(sId);
