@@ -136,9 +136,9 @@ export async function renderChatRoom(container, user, roomId) {
     // Socket.io 연결
     socket = io('http://localhost:4000', {
       withCredentials: true,
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      // reconnection: true,
+      // reconnectionAttempts: 10,
+      // reconnectionDelay: 2000,
     });
 
     if (room.currentMembers>=room.maxMembers) {
@@ -157,37 +157,13 @@ export async function renderChatRoom(container, user, roomId) {
       socket.emit('joinRoom', { roomId });
     }
 
-    // // 1. 소켓 초기화 직후에 이벤트 추가
-    // socket.on('disconnect', (reason) => {
-    //   console.log('서버 연결 끊김:', reason);
-    //   showSystemMessage('서버와의 연결이 끊어졌습니다. 재연결 시도 중...');
-    //   attemptReconnect();
-    // });
-
-    // socket.on('connect_error', (err) => {
-    //   console.log('연결 에러:', err);
-    //   showSystemMessage('서버 연결 오류. 재연결 시도 중...');
-    //   attemptReconnect();
-    // });
-
-    // // 2. 재연결 함수
-    // function attemptReconnect() {
-    //   if (socket && !socket.connected) {
-    //     console.log('재연결 시도...');
-    //     socket.connect();
-    //   }
-    // }
-
-    // // 3. 브라우저 탭 활성화 감지
-    // document.addEventListener('visibilitychange', () => {
-    //   if (document.visibilityState === 'visible' && socket && !socket.connected) {
-    //     console.log('탭 활성화 - 소켓 재연결 시도...');
-    //     showSystemMessage('채팅 탭이 활성화되었습니다. 서버와 재연결 중...');
-    //     socket.connect();
-    //   }
-    // });
+    // [서버와 연결 끊김 Event]
+    socket.on('disconnect', (reason) => {
+      console.log('서버와 연결 끊김:', reason);
+      showErrorMessage(`서버와 연결 끊김:, ${reason}`);
+    });
     
-    // [강제 연결 끊김 Event]
+    // [수동으로 서버와 연결 끊김 Event]
     socket.on('forcedDisconnect', data => {
       showErrorMessage(data.msg);
     });

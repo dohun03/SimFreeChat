@@ -18,8 +18,8 @@ import { UnauthorizedException } from '@nestjs/common';
     origin: 'http://localhost:3000',
     credentials: true,
   },
-  pingInterval: 60000 * 5,  // 5분마다 ping
-  pingTimeout: 60000 * 15,   // 15분 동안 pong 없으면 연결 끊음
+  pingInterval: 60000 * 1,  // 1분마다 ping
+  pingTimeout: 60000 * 2,   // 2분 동안 pong 없으면 연결 끊음
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
