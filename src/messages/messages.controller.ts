@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 
 @Controller('messages')
@@ -8,7 +8,10 @@ export class MessagesController {
   ) {}
 
   @Get('/:roomId')
-  async getMessagesByRoom(@Param('roomId') roomId: number) {
-    return this.messagesService.getMessagesByRoom(roomId);
+  async getMessagesByRoom(
+    @Param('roomId') roomId: number,
+    @Query('search') search?: string
+  ) {
+    return this.messagesService.getMessagesByRoom(roomId, search);
   }
 }

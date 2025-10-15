@@ -50,7 +50,7 @@ export async function renderChatRoom(container, user, roomId) {
 
   try {
     // 방 정보 조회
-    const roomResponse = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    const roomResponse = await fetch(`/api/rooms/${roomId}`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -62,10 +62,31 @@ export async function renderChatRoom(container, user, roomId) {
     const isOwner = room.owner.id===user.id;
 
     container.innerHTML = `
-      <div class="mt-3 hstack gap-3">
-        <h3 id="room-name" class="mb-3 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
-        <button type="button" id="chat-edit" class="btn btn-sm btn-primary align-self-start ${isOwner ? '' : 'd-none'}">수정</button>
+      <div class="mt-3 mb-2 d-flex justify-content-between align-items-center">
+        <!-- 왼쪽: 제목 + 수정 버튼 -->
+        <div class="d-flex align-items-center gap-2">
+          <h3 id="room-name" class="mb-0 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
+          <button type="button" id="chat-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">수정</button>
+        </div>
+
+        <!-- 오른쪽: 검색창 -->
+        <div class="input-group input-group-sm" style="width: 300px;">
+          <div class="btn-group-vertical">
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="search-up" style="padding: 0.25rem 0.35rem; font-size: 0.7rem;">
+              <i class="bi bi-chevron-up"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="search-down" style="padding: 0.25rem 0.35rem; font-size: 0.7rem;">
+              <i class="bi bi-chevron-down"></i>
+            </button>
+          </div>
+      
+          <input type="text" class="form-control" placeholder="메시지 검색..." id="chat-search" maxlength="20">
+          <button class="btn btn-outline-secondary" type="button"  id="chat-search-submit">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
       </div>
+
       <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
         <div class="flex-grow-1 position-relative">
           <!-- 시스템 알림 영역 -->
@@ -119,7 +140,7 @@ export async function renderChatRoom(container, user, roomId) {
             </div>
           </div>
         </div>
-      </div>      
+      </div>
     `;
 
     const roomName = document.getElementById('room-name');
@@ -131,6 +152,10 @@ export async function renderChatRoom(container, user, roomId) {
     const chatInput = document.getElementById('chat-input');
     const chatSubmit = document.getElementById('chat-submit');
     const chatReset = document.getElementById('chat-reset');
+    const chatSearchInput = document.getElementById('chat-search');
+    const chatSearchSubmit = document.getElementById('chat-search-submit');
+    const chatSearchUp = document.getElementById('search-up');
+    const chatSearchDown = document.getElementById('search-down');
     const chatEdit = document.getElementById('chat-edit');
 
     // Socket.io 연결
@@ -240,7 +265,7 @@ export async function renderChatRoom(container, user, roomId) {
         btn.addEventListener('click', async e => {
           const targetId = Number(e.target.dataset.id);
           try {
-            const res = await fetch(`/api/users/${encodeURIComponent(targetId)}`, { method: 'GET' });
+            const res = await fetch(`/api/users/${targetId}`, { method: 'GET' });
             if (!res.ok) throw new Error('유저 정보를 가져올 수 없습니다.');
             const targetUser = await res.json();
       
@@ -288,16 +313,17 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // 기존 채팅 메시지 조회
-    const MessagesResponse = await fetch(`/api/messages/${encodeURIComponent(roomId)}`, {
+    const res = await fetch(`/api/messages/${roomId}`, {
       method: 'GET'
     });
-    const messages = await MessagesResponse.json();
+    const messages = await res.json();
 
     messages.forEach(msg => {
       const createdAt = formatDate(msg.created_at);
 
       const li = document.createElement('li');
       li.classList.add('list-group-item');
+      li.dataset.id = msg.id;
 
       const isMine = msg.user.id === user.id;
       if (isMine) li.classList.add('bg-light');
@@ -353,6 +379,100 @@ export async function renderChatRoom(container, user, roomId) {
     chatReset.addEventListener('click', () => {
       chatInput.value = '';
       resizeTextarea();
+    });
+
+    // 메시지 검색
+    chatSearchSubmit.addEventListener('click', searchMessage);
+    chatSearchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchMessage();
+      }
+    });
+
+    let searchArray;
+    let searchStatus = 0;
+    
+    async function searchMessage() {
+      const search = chatSearchInput.value.trim();
+      if (!search) {
+        showSystemMessage('검색어를 입력하세요.');
+        return;
+      }
+      
+      try {
+        searchStatus = 0;
+
+        const res = await fetch(`/api/messages/${roomId}?search=${encodeURIComponent(search)}`, {
+          method: 'GET'
+        });
+        if (!res.ok) throw new Error('메시지를 불러오는 중 오류가 발생했습니다.');
+
+        const messages = await res.json();
+        if (messages.length===0) {
+          showSystemMessage('검색 결과가 없습니다.');
+          return;
+        }
+
+        searchArray = messages;
+        
+        const firstMessageId = searchArray[searchStatus].id;
+        highlightMessage(firstMessageId);
+      } catch (err) {
+        console.log('서버 에러:', err);
+      }
+    }
+
+    // 메시지 검색 하이라이트
+    function highlightMessage(targetId) {
+      // 이전 하이라이트 제거
+      document.querySelectorAll('.border-warning').forEach(el => {
+        el.classList.remove('border', 'border-warning', 'border-3', 'rounded-3');
+      });
+
+      const target = document.querySelector(`[data-id="${targetId}"]`);
+      if (!target) return;
+
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('border', 'border-warning', 'border-3', 'rounded-3');
+
+      setTimeout(() => {
+        target.classList.remove('border', 'border-warning', 'border-3', 'rounded-3');
+      }, 3000);
+    }
+
+    // 위로 이동 버튼
+    chatSearchUp.addEventListener('click', () => {
+      if (!searchArray || searchArray.length === 0) {
+        showSystemMessage('검색 결과가 없습니다.');
+        return;
+      }
+      searchStatus++;
+      if (searchStatus >= searchArray.length) {
+        showSystemMessage('마지막 검색 결과입니다.');
+        searchStatus--;
+        return;
+      }
+
+      const targetId = searchArray[searchStatus].id;
+      highlightMessage(targetId);
+    });
+
+    // 아래로 이동 버튼
+    chatSearchDown.addEventListener('click', () => {
+      if (!searchArray || searchArray.length === 0) {
+        showSystemMessage('검색 결과가 없습니다.');
+        return;
+      }
+      searchStatus--;
+      if (searchStatus < 0) {
+        showSystemMessage('첫 번째 검색 결과입니다.');
+        searchStatus = 0;
+        return;
+      }
+
+      const targetId = searchArray[searchStatus].id;
+      highlightMessage(targetId);
     });
 
     // 채팅방 수정 페이지

@@ -1,6 +1,6 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { Message } from './messages.entity';
@@ -40,9 +40,18 @@ export class MessagesService {
     }
   }
 
-  async getMessagesByRoom(roomId: number): Promise<ResponseMessageDto[]> {
+  async getMessagesByRoom(roomId: number, search?: string): Promise<ResponseMessageDto[]> {
+    const where: any = { room: { id: roomId } };
+    const order: any = { id: 'ASC' };
+
+    if (search) {
+      where.content = ILike(`%${search}%`);
+      order.id = 'DESC';
+    }
+
     const messages = await this.messageRepository.find({
-      where: { room: { id: roomId } },
+      where,
+      order
     });
 
     return messages.map((msg) => {
