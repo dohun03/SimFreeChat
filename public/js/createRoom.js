@@ -1,6 +1,9 @@
-export function renderCreateRoom(container, user) {
+import { router } from './app.js'
+
+export async function renderCreateRoom(container, user) {
   if (!user) {
-    location.hash = '#/login';
+    history.pushState(null, '', '/login');
+    await router();
     return;
   }
 
@@ -53,7 +56,7 @@ export function renderCreateRoom(container, user) {
     };
 
     try {
-      const res = await fetch('/rooms', {
+      const res = await fetch('/api/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,8 +70,8 @@ export function renderCreateRoom(container, user) {
       }
 
       const data = await res.json();
-      console.log(data);
-      location.hash = `#/room/${data.id}`;
+      history.pushState(null, '', `/room/${data.id}`);
+      await router();
     } catch (err) {
       console.error(err);
     }

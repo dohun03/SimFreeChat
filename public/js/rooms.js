@@ -1,4 +1,4 @@
-import { escapeHtml } from './app.js'
+import { escapeHtml, router } from './app.js'
 
 export function renderRoomsList(container) {
   container.innerHTML = `
@@ -33,7 +33,7 @@ export function renderRoomsList(container) {
 
   async function loadRooms(search='') {
     try {
-      const res = await fetch(`http://localhost:4000/rooms?search=${encodeURIComponent(search)}`, {
+      const res = await fetch(`/api/rooms?search=${encodeURIComponent(search)}`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -55,7 +55,10 @@ export function renderRoomsList(container) {
           <td class="text-center">${room.password ? '🔒 비공개' : '🌐 공개'}</td>
         `;
         tr.style.cursor = 'pointer';
-        tr.addEventListener('click', () => location.hash = `#/room/${room.id}`);
+        tr.addEventListener('click', async () => {
+          history.pushState(null, '', `/room/${room.id}`);
+          await router();
+        });
         tbody.appendChild(tr);
       });
     } catch {
@@ -65,8 +68,9 @@ export function renderRoomsList(container) {
 
   searchBtn.addEventListener('click', () => loadRooms(searchInput.value));
 
-  createRoomhBtn.addEventListener('click', () => {
-    window.location.hash = '/create-room';
+  createRoomhBtn.addEventListener('click', async () => {
+    history.pushState(null, '', '/create-room');
+    await router();
   })
 
   loadRooms();

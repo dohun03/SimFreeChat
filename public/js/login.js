@@ -1,3 +1,5 @@
+import { router } from "./app.js";
+
 export function renderLogin(container, user) {
   if (user) {
     container.innerHTML = `<h2 class="text-center mt-5">이미 로그인 되어있습니다.</h2>`;
@@ -13,7 +15,7 @@ export function renderLogin(container, user) {
         <button type="submit" class="btn btn-primary w-100">로그인</button>
       </form>
       <p id="login-msg" class="text-danger mt-2"></p>
-      <p class="mt-2">처음이세요? <a href="#/register">회원가입</a></p>
+      <p class="mt-2">처음이세요? <a href="/register">회원가입</a></p>
     </div>
   `;
 
@@ -23,7 +25,7 @@ export function renderLogin(container, user) {
     const password = document.getElementById('password').value;
 
     try {
-      const res = await fetch('http://localhost:4000/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -31,7 +33,8 @@ export function renderLogin(container, user) {
       });
       const data = await res.json();
       if (res.ok) {
-        location.hash = '#/';
+        history.pushState(null, '', '/');
+        await router();
       } else {
         document.getElementById('login-msg').innerText = data.message || '로그인 실패';
       }

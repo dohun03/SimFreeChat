@@ -8,11 +8,13 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // CORS 설정
   app.enableCors({
     origin: 'http://localhost:3000',
     credentials: true,
   });
-  // dto 자동 검사 / 에러 메시지 반환
+
+  // DTO 자동 검사
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -22,13 +24,23 @@ async function bootstrap() {
         const messages = errors
           .map(err => err.constraints ? Object.values(err.constraints) : [])
           .flat();
-  
         return new BadRequestException(messages);
       },
     }),
-  );  
+  );
+
   app.use(cookieParser());
-  app.use(express.static(join(__dirname, '..', 'public')));
+
+  app.setGlobalPrefix('api');
+
+  const server = app.getHttpAdapter().getInstance();
+  const publicPath = join(__dirname, '..', 'public');
+  
+  // /api 경로 요청은 서버로, 나머지는 프론트에 index.html 제공
+  server.use(express.static(publicPath));
+  server.get(/^(?!\/api).*$/, (req, res) => {
+    res.sendFile(join(publicPath, 'index.html'));
+  });
 
   await app.listen(process.env.PORT ?? 4000);
 }

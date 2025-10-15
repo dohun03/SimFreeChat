@@ -1,8 +1,9 @@
-import { formatDate } from "./app.js";
+import { formatDate, router } from "./app.js";
 
-export function renderProfile(container, user) {
+export async function renderProfile(container, user) {
   if (!user) {
-    location.hash = '#/login';
+    history.pushState(null, '', '/login');
+    await router();
     return;
   }
 
@@ -43,7 +44,7 @@ export function renderProfile(container, user) {
     if (password) payload.password = password;
 
     try {
-      const res = await fetch('/users/me', {
+      const res = await fetch('/api/users/me', {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

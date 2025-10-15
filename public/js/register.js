@@ -1,4 +1,5 @@
-// js/register.js
+import { router } from "./app.js";
+
 export function renderRegister(container, user) {
   if (user) {
     container.innerHTML = `<h2 class="text-center mt-5">이미 로그인 되어있습니다.</h2>`;
@@ -16,7 +17,7 @@ export function renderRegister(container, user) {
         <button type="submit" class="btn btn-success w-100">회원가입</button>
       </form>
       <p id="register-msg" class="text-danger mt-2"></p>
-      <p class="mt-2">계정이 있으신가요? <a href="#/login">로그인</a></p>
+      <p class="mt-2">계정이 있으신가요? <a href="/login">로그인</a></p>
     </div>
   `;
 
@@ -35,7 +36,7 @@ export function renderRegister(container, user) {
     }
 
     try {
-      const res = await fetch('http://localhost:4000/users/register', {
+      const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -43,7 +44,8 @@ export function renderRegister(container, user) {
       const data = await res.json();
       if (res.ok) {
         alert(data.message);
-        location.hash = '#/login';
+        history.pushState(null, '', '/login');
+        await router();
       } else {
         errorMessage.innerText = data.message || '회원가입 실패';
       }

@@ -1,14 +1,15 @@
-import { escapeHtml } from './app.js'
+import { escapeHtml, router } from './app.js'
 
 export async function renderEditRoom(container, user, roomId) {
   if (!user) {
-    location.hash = '#/login';
+    history.pushState(null, '', '/login');
+    await router();
     return;
   }
 
   try {
     // 방 정보 조회
-    const roomResponse = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+    const roomResponse = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -70,7 +71,7 @@ export async function renderEditRoom(container, user, roomId) {
       };
 
       try {
-        const res = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+        const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -95,7 +96,7 @@ export async function renderEditRoom(container, user, roomId) {
     deleteBtn.addEventListener('click', async () => {
       if (confirm('정말 삭제하시겠습니까?')) {
         try {
-          const res = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+          const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
             method: 'DELETE',
           });
           const data = await res.json();
@@ -106,7 +107,8 @@ export async function renderEditRoom(container, user, roomId) {
           }
   
           alert(data.message);
-          location.hash = `#/`;
+          history.pushState(null, '', '/');
+          await router();
         } catch (err) {
           console.error(err);
         }

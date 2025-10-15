@@ -34,10 +34,12 @@ window.addEventListener('beforeunload', () => {
 
 const app = document.getElementById('app');
 // 라우팅 처리 (간단 hash 방식)
-async function router() {
-  const path = location.hash.replace('#', '') || '/';
+export async function router() {
+  // location.hash 대신 location.pathname 사용
+  const path = location.pathname || '/';
   app.innerHTML = '';
-  const res = await fetch("/users/me", { credentials: "include" });
+
+  const res = await fetch("/api/users/me", { credentials: "include" });
   const user = res.ok ? await res.json() : null;
 
   leaveChatRoom();
@@ -74,6 +76,12 @@ async function router() {
   }
 }
 
-// 초기 실행
-window.addEventListener('hashchange', router);
+// 이벤트는 hashchange 대신 popstate 사용
+window.addEventListener('popstate', router);
 window.addEventListener('load', router);
+
+// SPA 내부에서 이동할 때
+export function navigate(path) {
+  history.pushState({}, '', path);
+  router();
+}

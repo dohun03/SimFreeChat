@@ -1,11 +1,12 @@
-import { escapeHtml, formatDate } from './app.js'
+import { escapeHtml, formatDate, router } from './app.js'
 
 let socket = null;
 let currentRoomId = null;
 
 export async function renderChatRoom(container, user, roomId) {
   if (!user) {
-    location.hash = '#/login';
+    history.pushState(null, '', '/login');
+    await router();
     return;
   }
 
@@ -49,7 +50,7 @@ export async function renderChatRoom(container, user, roomId) {
 
   try {
     // 방 정보 조회
-    const roomResponse = await fetch(`/rooms/${encodeURIComponent(roomId)}`, {
+    const roomResponse = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -263,7 +264,7 @@ export async function renderChatRoom(container, user, roomId) {
         btn.addEventListener('click', async e => {
           const targetId = Number(e.target.dataset.id);
           try {
-            const res = await fetch(`/users/${encodeURIComponent(targetId)}`, { method: 'GET' });
+            const res = await fetch(`/api/users/${encodeURIComponent(targetId)}`, { method: 'GET' });
             if (!res.ok) throw new Error('유저 정보를 가져올 수 없습니다.');
             const targetUser = await res.json();
       
@@ -311,7 +312,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // 기존 채팅 메시지 조회
-    const MessagesResponse = await fetch(`/messages/${encodeURIComponent(roomId)}`, {
+    const MessagesResponse = await fetch(`/api/messages/${encodeURIComponent(roomId)}`, {
       method: 'GET'
     });
     const messages = await MessagesResponse.json();
@@ -380,7 +381,7 @@ export async function renderChatRoom(container, user, roomId) {
 
     // 채팅방 수정 페이지
     chatEdit.addEventListener('click', () => {
-      window.open(`#/edit-room/${roomId}`, '_blank');
+      window.open(`/edit-room/${roomId}`, '_blank');
     })
   } catch (err) {
     container.textContent = `서버 에러가 발생했습니다. ${err}`;
