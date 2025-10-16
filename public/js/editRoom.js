@@ -9,12 +9,12 @@ export async function renderEditRoom(container, user, roomId) {
 
   try {
     // 방 정보 조회
-    const roomResponse = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+    const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
       method: 'GET',
       credentials: 'include',
     });
-    const room = await roomResponse.json();
-    if (!roomResponse.ok || room.owner.id!=user.id) {
+    const room = await res.json();
+    if (!res.ok || room.owner.id!=user.id) {
       container.textContent = room.message || '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
@@ -32,13 +32,13 @@ export async function renderEditRoom(container, user, roomId) {
           <!-- 최대인원 -->
           <div class="mb-3">
             <label for="maxMembers" class="form-label">최대인원</label>
-            <input type="number" class="form-control form-control-sm" id="maxMembers" placeholder="최대 인원 입력" min="2" max="50" value="${escapeHtml(room.maxMembers)}">
+            <input type="number" class="form-control form-control-sm" id="maxMembers" placeholder="최대 인원 입력" min="2" max="50" value="${room.maxMembers}">
           </div>
 
           <!-- 비밀번호 -->
-          <div class="mb-3">
-            <label for="password" class="form-label">비밀번호</label>
+          <div class="mb-3 d-flex gap-2 align-items-center">
             <input type="password" class="form-control form-control-sm" id="password" placeholder="비밀번호">
+            <button type="button" class="btn btn-warning btn-sm ${room.password ? '' : 'd-none'}" id="remove-password-btn">Remove</button>
           </div>
 
           <div class="d-flex gap-2">
@@ -86,7 +86,34 @@ export async function renderEditRoom(container, user, roomId) {
           return;
         }
 
-        resultMessage.innerText = '방 정보가 변경되었습니다.';
+        alert('방 정보가 변경되었습니다.');
+        location.reload();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    const removePasswordBtn = document.getElementById('remove-password-btn');
+    removePasswordBtn.addEventListener('click', async () => {
+      if (!confirm('비밀번호를 해제하시겠습니까?')) return;
+
+      try {
+        const res = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: null }),
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          resultMessage.innerText = '비밀번호 해제 실패: ' + (data.message || res.status);
+          return;
+        }
+
+        alert('비밀번호가 해제되었습니다.');
+        location.reload();
       } catch (err) {
         console.error(err);
       }

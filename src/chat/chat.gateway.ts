@@ -68,12 +68,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const deleteId: string[] = [];
     
+    // socketMap을 순회하면서 맵의 roomId와 받아온 roomId 일치 여부 확인
+    // 소켓 아이디를 deleteId 배열에 저장
     for (const [sId, rId] of socketMap.entries()) {
-      if (rId===roomId) {
+      if (rId == roomId) {
         deleteId.push(sId);
       }
     }
 
+    // deleteId 배열에 저장된 소켓 찾아서 끊기.
     for (const sId of deleteId) {
       const socket = this.server.sockets.sockets.get(sId);
       if (socket) {
@@ -153,8 +156,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
     const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
-    this.removeUserSocket(roomId, roomUsers.id);
-
+    console.log('deletedUser',deletedUser);
+    this.removeUserSocket(roomId, deletedUser.id);
+    
     this.server.to(roomId.toString()).emit('systemMessage', {
       msg: `${deletedUser.username} 님이 퇴장했습니다.`,
       roomUsers,

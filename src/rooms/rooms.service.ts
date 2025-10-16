@@ -59,7 +59,7 @@ export class RoomsService {
     try {
       if (name !== undefined) room.name = name;
       if (maxMembers !== undefined) room.maxMembers = maxMembers;
-      if (password !== undefined) room.password = await bcrypt.hash(password, 10);
+      if (password !== undefined) room.password = password === null ? null : await bcrypt.hash(password, 10);
   
       const updatedRoom = await this.roomRepository.save(room);
   
