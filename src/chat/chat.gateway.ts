@@ -109,7 +109,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const user = await this.getUserFromSession(client);
       const { roomId, password } = payload;
-      const { roomUsers, afterCount } = await this.chatService.joinRoom(roomId, user.userId, password);
+      const { roomUsers, afterCount, joinUser } = await this.chatService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
       this.removeUserSocket(roomId, user.userId);
@@ -118,7 +118,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       // 방 전체에 입장 메시지 전송
       this.server.to(roomId.toString()).emit('systemMessage', {
-        msg: `${user.username} 님이 입장했습니다.`,
+        msg: `${joinUser.username} 님이 입장했습니다.`,
         roomUsers,
         roomUserCount: afterCount,
       });
@@ -132,13 +132,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleLeaveRoom(client: Socket, payload: { roomId: number }) {
     try {
       const user = await this.getUserFromSession(client);
-      const { roomUsers, roomUserCount } = await this.chatService.leaveRoom(payload.roomId, user.userId);
+      const { roomUsers, roomUserCount, leaveUser } = await this.chatService.leaveRoom(payload.roomId, user.userId);
 
       client.leave(payload.roomId.toString());
   
       // 방 전체에 퇴장 메시지 전송
       this.server.to(payload.roomId.toString()).emit('systemMessage', {
-        msg: `${user.username} 님이 퇴장했습니다.`,
+        msg: `${leaveUser.username} 님이 퇴장했습니다.`,
         roomUsers,
         roomUserCount,
       });

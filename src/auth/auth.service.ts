@@ -29,10 +29,8 @@ export class AuthService {
 
     const sessionId = uuid();
     await this.redisService.createSession(sessionId, { 
-      userId: user.id, 
-      username: user.username, 
-      isAdmin: user.is_admin, 
-      isBanned: user.is_banned 
+      userId: user.id,
+      isAdmin: user.is_admin,
     });
 
     const { password: removed, ...safeUser } = user;

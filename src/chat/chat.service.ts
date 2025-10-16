@@ -29,7 +29,12 @@ export class ChatService {
       const isPasswordValid = await bcrypt.compare(password, room.password);
       if (!isPasswordValid) throw new BadRequestException('비밀번호가 일치하지 않습니다.');
     }
-
+    
+    const joinUser = await this.userRepository.findOne({
+      where: { id: userId }
+    });
+    if (!joinUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
+    
     await this.redisService.addUserToRoom(roomId, userId);
 
     const afterCount = await this.redisService.getRoomUserCount(roomId);
@@ -39,12 +44,17 @@ export class ChatService {
       select: ['id','username']
     });
 
-    return { roomUsers, afterCount };
+    return { roomUsers, afterCount, joinUser };
   }
 
   async leaveRoom(roomId: number, userId: number) {
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
+
+    const leaveUser = await this.userRepository.findOne({
+      where: { id: userId }
+    });
+    if (!leaveUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
 
     await this.redisService.removeUserFromRoom(roomId, userId);
 
@@ -55,27 +65,30 @@ export class ChatService {
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
-    return { roomUsers, roomUserCount };
+    return { roomUsers, roomUserCount, leaveUser };
   }
 
   async leaveAllRooms(sessionId: string) {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
     
-    const keys = await this.redisService.getAllRoomKeys();
+    const deletedUser = await this.userRepository.findOne({
+      where: { id: session.userId }
+    });
+    if (!deletedUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
+
+    const roomKeys = await this.redisService.getAllRoomKeys();
 
     await Promise.all(
-      keys.map(async (key) => {
+      roomKeys.map(async (key) => {
         const roomId = Number(key.split(':')[1]);
-
         const isUserInRoom = await this.redisService.isUserInRoom(roomId, session.userId);
         if (!isUserInRoom) {
-          console.log(`${roomId}번 방에는 ${session.username}님이 존재하지 않습니다.`);
+          console.log(`${roomId}번 방에는 ${deletedUser.username}번 님이 존재하지 않습니다.`);
           return;
         }
 
         await this.redisService.removeUserFromRoom(roomId, session.userId);
-
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
         const roomUsers = await this.userRepository.find({
           where: { id: In(roomUsersArray.map(userId => Number(userId))) },
@@ -83,7 +96,7 @@ export class ChatService {
         });
         const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
-        this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, session);
+        this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, deletedUser);
       })
     );
   }

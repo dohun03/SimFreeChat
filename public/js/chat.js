@@ -289,29 +289,6 @@ export async function renderChatRoom(container, user, roomId) {
       
     });
 
-    // [새 채팅 메시지 출력 Event]
-    socket.on('chatMessage', data => {
-      const createdAt = formatDate(data.created_at);
-
-      const li = document.createElement('li');
-      li.classList.add('list-group-item');
-
-      const isMine = data.user.id === user.id;
-      if (isMine) li.classList.add('bg-light');
-
-      li.innerHTML = `
-        <div class="d-flex justify-content-between">
-          <div class="me-2">
-            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(data.user.username)}</strong><br>
-            <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(data.content)}</div>
-          </div>
-          <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>
-        </div>
-      `;
-      messagesList.appendChild(li);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    });
-
     // 기존 채팅 메시지 조회
     const res = await fetch(`/api/messages/${roomId}`, {
       method: 'GET'
@@ -374,6 +351,30 @@ export async function renderChatRoom(container, user, roomId) {
       chatInput.value = '';
       resizeTextarea();
     }
+
+    // [새 채팅 메시지 출력 Event]
+    socket.on('chatMessage', data => {
+      const createdAt = formatDate(data.created_at);
+
+      const li = document.createElement('li');
+      li.classList.add('list-group-item');
+      li.dataset.id = data.id;
+
+      const isMine = data.user.id === user.id;
+      if (isMine) li.classList.add('bg-light');
+
+      li.innerHTML = `
+        <div class="d-flex justify-content-between">
+          <div class="me-2">
+            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(data.user.username)}</strong><br>
+            <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(data.content)}</div>
+          </div>
+          <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>
+        </div>
+      `;
+      messagesList.appendChild(li);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
     
     // 메시지 리셋
     chatReset.addEventListener('click', () => {
