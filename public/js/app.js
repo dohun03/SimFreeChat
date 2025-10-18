@@ -27,11 +27,6 @@ export function formatDate(date) {
   });
 }
 
-// 창 닫기, 새로고침, 페이지 이동 시 발생
-window.addEventListener('beforeunload', () => {
-  leaveChatRoom();
-});
-
 const app = document.getElementById('app');
 // 라우팅 처리 (간단 hash 방식)
 export async function router() {
@@ -74,11 +69,36 @@ export async function router() {
     default:
       app.innerHTML = '<h2 class="text-center mt-5">페이지를 찾을 수 없습니다.</h2>';
   }
+
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-link]');
+    if (!link) return;
+
+    const href = link.getAttribute('href');
+    if (!href) return;
+
+    // 외부 링크면 무시
+    const url = new URL(href, window.location.origin);
+    if (url.origin !== window.location.origin) return;
+
+    // Ctrl / Cmd / Shift / 중클릭 → 기본 동작 유지
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+
+    e.preventDefault();
+    navigate(url.pathname);
+  });
 }
 
-// 이벤트는 hashchange 대신 popstate 사용
+// DOM 전부 생성후 실행
+document.addEventListener('DOMContentLoaded', () => {
+  router();
+});
+// 창 닫기, 새로고침, 페이지 이동 시 실행
+window.addEventListener('beforeunload', () => {
+  leaveChatRoom();
+});
+// 브라우저 뒤로가기 / 앞으로가기 감지
 window.addEventListener('popstate', router);
-window.addEventListener('load', router);
 
 // SPA 내부에서 이동할 때
 export function navigate(path) {

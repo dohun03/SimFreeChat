@@ -46,7 +46,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         socketMap.delete(client.id);
         if (socketMap.size === 0) {
           this.userSockets.delete(userId);
-          console.log(`[SOCKET REMOVED] userId=${userId}`);
         }
         break;
       }

@@ -44,8 +44,6 @@ export function renderRoomsList(container) {
         return;
       }
 
-      console.log(rooms);
-
       rooms.forEach(room => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
