@@ -9,8 +9,6 @@ import { MessagesModule } from 'src/messages/messages.module';
 import { RoomsModule } from 'src/rooms/rooms.module';
 import { Room } from 'src/rooms/rooms.entity';
 
-console.log(RoomsModule);
-
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Room]),
