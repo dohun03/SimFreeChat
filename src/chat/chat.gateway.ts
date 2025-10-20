@@ -15,7 +15,7 @@ import { UnauthorizedException } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
-    origin: 'http://localhost:3000',
+    origin: process.env.SOCKET_ORIGIN,
     credentials: true,
   },
   pingInterval: 60000 * 1,  // 1분마다 ping

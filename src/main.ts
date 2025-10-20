@@ -4,15 +4,20 @@ import { AppModule } from './app.module';
 import { join } from 'path';
 import * as express from 'express';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // CORS 설정
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: process.env.SOCKET_ORIGIN,
     credentials: true,
   });
+  
+  // 웹소켓 서버 설정
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // DTO 자동 검사
   app.useGlobalPipes(
