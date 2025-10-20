@@ -7,7 +7,7 @@ import { renderEditRoom } from './pages/editRoom.js';
 import { renderChatRoom, leaveChatRoom } from './pages/chat.js';
 import { renderRoomsList } from './pages/rooms.js';
 import { renderAdmin } from './pages/admin/index.js';
-import { renderAdminUsers } from './pages/admin/users.js';
+import { renderEditUser } from './pages/admin/editUser.js';
 
 // XSS 방지 함수
 export function escapeHtml(str) {
@@ -55,9 +55,11 @@ export async function router() {
     case path === '/admin':
       renderAdmin(app, user);
       break;
-    case path === '/admin/users':
-      renderAdminUsers(app, user);
+    case path.startsWith('/admin/user/'): {
+      const userId = path.split('/')[3];
+      renderEditUser(app, user, userId);
       break;
+    }
     case path === '/create-room':
       renderCreateRoom(app, user);
       break;

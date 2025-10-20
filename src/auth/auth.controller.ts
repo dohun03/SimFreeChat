@@ -3,12 +3,14 @@ import type { Response } from 'express';
 import { LoginUserDto } from './dto/login-user.dto';
 import { AuthService } from './auth.service';
 import { ChatService } from 'src/chat/chat.service';
+import { RedisService } from 'src/redis/redis.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly chatService: ChatService
+    private readonly chatService: ChatService,
+    private readonly redisService: RedisService,
   ) {} // 서비스 클래스 자동 주입, 서비스의 메서드 호출 가능
 
   @Post('login')
@@ -38,7 +40,10 @@ export class AuthController {
     const sessionId = req.cookies['SESSIONID'];
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
-    await this.chatService.leaveAllRooms(sessionId);
+    const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
+    await this.chatService.leaveAllRooms(session.userId);
     await this.authService.logOut(sessionId);
 
     res.clearCookie('SESSIONID', {

@@ -9,7 +9,7 @@ export async function renderProfile(container, user) {
 
   container.innerHTML = `
     <div class="card p-4 mx-auto" style="max-width: 600px;">
-      <h2>프로필 설정</h2>
+      <h2>${user.username}님의 프로필 설정</h2>
       <form id="profile-form">
         <input type="text" id="username" placeholder="현재 아이디: ${user.username}" class="form-control mb-2" />
         <input type="email" id="email" placeholder="현재 이메일: ${user.email}" class="form-control mb-2" />

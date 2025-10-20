@@ -155,7 +155,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
     const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
-    console.log('deletedUser',deletedUser);
     this.removeUserSocket(roomId, deletedUser.id);
     
     this.server.to(roomId.toString()).emit('systemMessage', {

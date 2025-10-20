@@ -17,10 +17,10 @@ export function renderRoomsList(container) {
   </div>
 
   <table class="table table-bordered table-hover">
-  <col style="width: 70%"/>
-  <col style="width: 10%"/>
-  <col style="width: 10%"/>
-  <col style="width: 10%"/>
+  <col/>
+  <col style="width: 150px"/>
+  <col style="width: 100px"/>
+  <col style="width: 100px"/>
     <thead class="table-dark">
       <tr>
         <th>방 이름</th>

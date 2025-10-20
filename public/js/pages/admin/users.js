@@ -25,11 +25,10 @@ export async function renderAdminUsers(container, user) {
            style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
         <table class="table table-hover table-bordered align-middle mb-0">
           <col style="width: 5%">
-          <col style="width: 15%">
           <col>
-          <col style="width: 20%">
-          <col style="width: 10%">
-          <col style="width: 15%">
+          <col style="width: 30%">
+          <col style="width: 220px">
+          <col style="width: 100px">
           <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
             <tr>
               <th>ID</th>
@@ -37,7 +36,6 @@ export async function renderAdminUsers(container, user) {
               <th>이메일</th>
               <th>가입일</th>
               <th>권한</th>
-              <th>액션</th>
             </tr>
           </thead>
           <tbody id="user-table-body"></tbody>
@@ -62,16 +60,13 @@ export async function renderAdminUsers(container, user) {
 
       users.forEach((user) => {
         const tr = document.createElement('tr');
+        tr.dataset.id = user.id;
         tr.innerHTML = `
           <td>${user.id}</td>
           <td>${user.username}</td>
           <td>${user.email}</td>
           <td>${formatDate(user.created_at)}</td>
           <td>${user.is_admin ? '<b>관리자</b>' : '사용자'}</td>
-          <td>
-            <button class="btn btn-sm btn-warning me-1">수정</button>
-            <button class="btn btn-sm btn-danger">삭제</button>
-          </td>
         `;
         userTableBody.appendChild(tr);
       });
@@ -79,6 +74,17 @@ export async function renderAdminUsers(container, user) {
       console.error(err);
     }
   }
+
+  userTableBody.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr) return; // tr 이 아닌 영역 클릭 시 무시
+  
+    const userId = tr.dataset.id;
+    console.log('클릭한 유저 ID:', userId);
+    
+    history.pushState(null, '', `/admin/user/${userId}`);
+    router();
+  });
 
   searchBtn.addEventListener('click', () => {
     renderTable(searchInput.value);

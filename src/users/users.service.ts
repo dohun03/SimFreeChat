@@ -140,4 +140,66 @@ export class UsersService {
       throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
     }
   }
+
+  // 특정 사용자 프로필 수정하기 (관리자)
+  async updateUserById(sessionId: string, userId: number, updateUserDto: UpdateUserDto) {
+    const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
+    const admin = await this.userRepository.findOne({
+      where: { id: session.userId },
+      select: ['id', 'is_admin']
+    });
+    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId }
+    });
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    if (user.is_admin) throw new UnauthorizedException('관리자 정보는 수정할 수 없습니다.');
+
+    if (updateUserDto.username) user.username = updateUserDto.username;
+
+    if (updateUserDto.password) user.password = await bcrypt.hash(updateUserDto.password, 10);
+
+    if (updateUserDto.email) user.email = updateUserDto.email;
+
+    try {
+      await this.userRepository.save(user);
+      const { password, ...safeUser } = user;
+      return safeUser;
+    } catch (err) {
+      console.error('DB 저장 에러:', err);
+      throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
+    }
+  }
+
+  // 특정 사용자 삭제하기 (관리자)
+  async deleteUserById(sessionId: string, userId: number) {
+    const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
+    const admin = await this.userRepository.findOne({
+      where: { id: session.userId },
+      select: ['id', 'is_admin']
+    });
+    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'is_admin']
+    });
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    if (user.is_admin) throw new UnauthorizedException('관리자 정보는 삭제할 수 없습니다.');
+    try {
+      const result = await this.userRepository.delete({
+        id: userId,
+      });
+  
+      if (result.affected === 0) throw new BadRequestException('사용자가 존재하지 않거나 권한이 없습니다.');
+    } catch (err) {
+      console.error('DB 삭제 에러:', err);
+      throw new InternalServerErrorException('사용자 삭제 중 문제가 발생했습니다.');
+    }
+  }
 }
