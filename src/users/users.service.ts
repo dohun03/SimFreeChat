@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './users.entity';
 import * as bcrypt from 'bcrypt';
@@ -66,6 +66,31 @@ export class UsersService {
     const { password, ...safeUser } = user;
     
     return safeUser;
+  }
+
+  // 모든 사용자 조회 (관리자)
+  async getAll(sessionId: string, search?: string) {
+    const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
+    const admin = await this.userRepository.findOne({
+      where: { id: session.userId }
+    });
+    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+
+    const where: any = new Object();
+
+    if (search) {
+      where.username = Like(`%${search}%`);
+    }
+
+    const users = await this.userRepository.find({
+      where,
+      select: ['id', 'username', 'email', 'is_admin', 'created_at', 'updated_at']
+    });
+    if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+
+    return users;
   }
 
   // 본인 프로필 수정하기

@@ -1,4 +1,4 @@
-import { escapeHtml, router } from './app.js'
+import { escapeHtml, router } from '../app.js'
 
 export async function renderEditRoom(container, user, roomId) {
   if (!user) {

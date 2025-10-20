@@ -1,4 +1,4 @@
-import { formatDate, router } from "./app.js";
+import { formatDate, router } from '../app.js';
 
 export async function renderProfile(container, user) {
   if (!user) {

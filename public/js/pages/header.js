@@ -1,4 +1,4 @@
-import { router, navigate } from "./app.js";
+import { router, navigate } from '../app.js';
 
 export function renderHeader(user) {
   const header = document.getElementById("header");

@@ -1,37 +1,46 @@
-import { escapeHtml, router } from './app.js'
+import { escapeHtml, router } from '../app.js'
 
 export function renderRoomsList(container) {
   container.innerHTML = `
-    <div class="mb-3">
-      <input type="text" id="search" placeholder="방 제목 검색" class="form-control d-inline-block w-75"/>
-      <button id="search-btn" class="btn btn-success">검색</button>
-      <button id="create-room-btn" class="btn btn-primary float-end">방 생성</button>
+
+  <h2 class="mb-3">채팅방 목록</h2>
+  <div class="row mb-3 align-items-center">
+    <div class="col-md-8">
+      <div class="input-group">
+        <input type="text" id="room-search" class="form-control" placeholder="방 제목 검색">
+        <button class="btn btn-primary" id="search-btn">검색</button>
+      </div>
     </div>
-    <table class="table table-bordered table-hover">
-    <col style="width: 70%"/>
-    <col style="width: 10%"/>
-    <col style="width: 10%"/>
-    <col style="width: 10%"/>
-      <thead class="table-dark">
-        <tr>
-          <th>방 이름</th>
-          <th class="text-center">방장</th>
-          <th class="text-center">인원</th>
-          <th class="text-center">공개 여부</th>
-        </tr>
-      </thead>
-      <tbody id="rooms-tbody">
-        <tr><td colspan="4">불러오는 중...</td></tr>
-      </tbody>
-    </table>
+    <div class="col-md-4 text-end">
+      <button id="create-room-btn" class="btn btn-success">방 생성</button>
+    </div>
+  </div>
+
+  <table class="table table-bordered table-hover">
+  <col style="width: 70%"/>
+  <col style="width: 10%"/>
+  <col style="width: 10%"/>
+  <col style="width: 10%"/>
+    <thead class="table-dark">
+      <tr>
+        <th>방 이름</th>
+        <th class="text-center">방장</th>
+        <th class="text-center">인원</th>
+        <th class="text-center">공개 여부</th>
+      </tr>
+    </thead>
+    <tbody id="rooms-tbody">
+      <tr><td colspan="4">불러오는 중...</td></tr>
+    </tbody>
+  </table>
   `;
 
   const tbody = document.getElementById('rooms-tbody');
-  const searchInput = document.getElementById('search');
+  const searchInput = document.getElementById('room-search');
   const searchBtn = document.getElementById('search-btn');
   const createRoomhBtn = document.getElementById('create-room-btn');
 
-  async function loadRooms(search='') {
+  async function renderRooms(search='') {
     try {
       const res = await fetch(`/api/rooms?search=${encodeURIComponent(search)}`, {
         method: 'GET',
@@ -64,12 +73,18 @@ export function renderRoomsList(container) {
     }
   }
 
-  searchBtn.addEventListener('click', () => loadRooms(searchInput.value));
+  searchBtn.addEventListener('click', () => renderRooms(searchInput.value));
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      renderRooms(searchInput.value);
+    }
+  });
 
   createRoomhBtn.addEventListener('click', async () => {
     history.pushState(null, '', '/create-room');
     await router();
   })
 
-  loadRooms();
+  renderRooms();
 }

@@ -1,0 +1,80 @@
+import { renderAdminUsers } from './users.js';
+
+export function renderAdmin(container, user, currentTab = 'users') {
+  if (!user || !user.is_admin) {
+    container.innerHTML = '<h2 class="text-center mt-5">관리자 권한이 필요합니다.</h2>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="admin-container" style="font-family:Arial,sans-serif;">
+      <header class="d-flex align-items-center justify-content-between mb-3">
+        <h2 class="mb-0">관리자 대시보드</h2>
+        <nav>
+          <ul class="nav nav-tabs">
+            <li class="nav-item">
+              <a class="nav-link" href="#" data-tab="users">사용자 목록</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" data-tab="rooms">방 관리</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" data-tab="logs">로그 확인</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#" data-tab="settings">설정</a>
+            </li>
+          </ul>
+        </nav>
+      </header>
+      <main id="admin-content" class="p-3 rounded border border-top-0 bg-white"></main>
+    </div>
+  `;
+
+  const content = container.querySelector('#admin-content');
+  const links = container.querySelectorAll('.nav-link');
+
+  // 활성 탭 표시
+  links.forEach(link => {
+    link.classList.toggle('active', link.dataset.tab === currentTab);
+  });
+
+  // 클릭 이벤트
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tab = link.dataset.tab;
+
+      // active 상태 변경
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+
+      // 탭 렌더링
+      renderAdminContent(content, user, tab);
+    });
+  });
+
+  // 초기 렌더링
+  renderAdminContent(content, user, currentTab);
+}
+
+function renderAdminContent(contentContainer, user, tab) {
+  contentContainer.innerHTML = '';
+
+  switch (tab) {
+    case 'users':
+      renderAdminUsers(contentContainer, user);
+      break;
+    case 'rooms':
+      contentContainer.innerHTML = '<p>방 관리 페이지 예시</p>';
+      break;
+    case 'logs':
+      contentContainer.innerHTML = '<p>로그 확인 페이지 예시</p>';
+      break;
+    case 'settings':
+      contentContainer.innerHTML = '<p>설정 페이지 예시</p>';
+      break;
+    default:
+      contentContainer.innerHTML = '<p>선택된 메뉴가 없습니다.</p>';
+  }
+}

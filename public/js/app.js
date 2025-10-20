@@ -1,11 +1,13 @@
-import { renderHeader } from './header.js';
-import { renderLogin } from './login.js';
-import { renderRegister } from './register.js';
-import { renderProfile } from './profile.js';
-import { renderCreateRoom } from './createRoom.js';
-import { renderEditRoom } from './editRoom.js';
-import { renderRoomsList } from './rooms.js';
-import { renderChatRoom, leaveChatRoom } from './chat.js';
+import { renderHeader } from './pages/header.js';
+import { renderLogin } from './pages/login.js';
+import { renderRegister } from './pages/register.js';
+import { renderProfile } from './pages/profile.js';
+import { renderCreateRoom } from './pages/createRoom.js';
+import { renderEditRoom } from './pages/editRoom.js';
+import { renderChatRoom, leaveChatRoom } from './pages/chat.js';
+import { renderRoomsList } from './pages/rooms.js';
+import { renderAdmin } from './pages/admin/index.js';
+import { renderAdminUsers } from './pages/admin/users.js';
 
 // XSS 방지 함수
 export function escapeHtml(str) {
@@ -50,6 +52,12 @@ export async function router() {
     case path === '/profile':
       renderProfile(app, user);
       break;
+    case path === '/admin':
+      renderAdmin(app, user);
+      break;
+    case path === '/admin/users':
+      renderAdminUsers(app, user);
+      break;
     case path === '/create-room':
       renderCreateRoom(app, user);
       break;
@@ -69,7 +77,10 @@ export async function router() {
     default:
       app.innerHTML = '<h2 class="text-center mt-5">페이지를 찾을 수 없습니다.</h2>';
   }
+}
 
+// DOM 전부 생성후 실행
+document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', (e) => {
     const link = e.target.closest('[data-link]');
     if (!link) return;
@@ -87,10 +98,6 @@ export async function router() {
     e.preventDefault();
     navigate(url.pathname);
   });
-}
-
-// DOM 전부 생성후 실행
-document.addEventListener('DOMContentLoaded', () => {
   router();
 });
 // 창 닫기, 새로고침, 페이지 이동 시 실행

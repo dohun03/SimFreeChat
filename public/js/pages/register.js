@@ -1,4 +1,4 @@
-import { router } from "./app.js";
+import { router } from '../app.js';
 
 export function renderRegister(container, user) {
   if (user) {

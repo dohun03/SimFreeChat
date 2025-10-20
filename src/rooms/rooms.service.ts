@@ -91,8 +91,8 @@ export class RoomsService {
     }
   }
 
-  // 방 전체 조회 / 여기서부터 수정!!!
-  async getAllRooms(search: any) {
+  // 방 전체 조회
+  async getAllRooms(search?: string) {
     try {
       const where: any = new Object();
 
