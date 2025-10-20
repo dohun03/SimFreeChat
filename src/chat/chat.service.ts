@@ -81,10 +81,10 @@ export class ChatService {
         const roomId = Number(key.split(':')[1]);
         const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
         if (!isUserInRoom) {
-          console.log(`${roomId}번 방에는 ${leaveUser.username}번 님이 존재하지 않습니다.`);
+          console.log(`${roomId}번 방에는 ${leaveUser.username}님이 존재하지 않습니다.`);
           return;
         }
-
+        console.log(`${roomId}번 방에서 ${leaveUser.username}님을 내보냈습니다.`);
         await this.redisService.removeUserFromRoom(roomId, userId);
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
         const roomUsers = await this.userRepository.find({

@@ -1,5 +1,4 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UnauthorizedException, UsePipes, ValidationPipe } from '@nestjs/common';
-import { ChatService } from 'src/chat/chat.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
@@ -8,7 +7,6 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly chatService: ChatService,
   ) {}
 
   @Post('register')
@@ -79,7 +77,6 @@ export class UsersController {
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     await this.usersService.deleteUserById(sessionId, userId);
-    await this.chatService.leaveAllRooms(userId);
     
     return { message: '삭제 되었습니다.' };
   }
