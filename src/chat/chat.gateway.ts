@@ -144,9 +144,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUsers,
         roomUserCount,
       });
+
+      // 클라이언트에 콜백 실행 값 리턴
+      return { success: true };
     } catch (err) {
-      console.log(err.message);
+      console.error(err.message);
       client.disconnect();
+      // 클라이언트에 콜백 실행 값 리턴
+      return { success: false, error: err.message };
     }
   }
 
@@ -206,7 +211,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       this.server.to(payload.roomId.toString()).emit('chatMessage', message);
     } catch (err) {
-      console.log(err.message);
+      console.error(err.message);
     }
   }
 
@@ -224,7 +229,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUserCount,
       });
     } catch (err) {
-      console.log(err.message);
+      console.error(err.message);
     }
   }
 }

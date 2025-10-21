@@ -495,10 +495,15 @@ export async function renderChatRoom(container, user, roomId) {
 // 채팅방 나가기
 export function leaveChatRoom() {
   if (socket && currentRoomId) {
-    socket.emit('leaveRoom', { roomId: currentRoomId }, () => {
-      socket.off();
-      socket.disconnect();
-      socket = null;
+    socket.emit('leaveRoom', { roomId: currentRoomId }, (res) => {
+      if (res?.success) {
+        console.log('서버 퇴장 완료, 안전하게 연결 종료');
+        socket.off();
+        socket.disconnect();
+        socket = null;
+      } else {
+        console.error('퇴장 처리 실패:', res?.error);
+      }
     });
   }
 }
