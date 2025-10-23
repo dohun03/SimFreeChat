@@ -52,6 +52,7 @@ export async function renderAdminUsers(container, user) {
     try {
       const res = await fetch(`/api/users?search=${encodeURIComponent(search)}`, {
         method: 'GET',
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('유저 데이터를 불러오는 중 오류 발생');
       

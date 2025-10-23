@@ -23,7 +23,7 @@ export function renderHeader(user) {
           <img src="/img/default-avatar.png" alt="avatar" width="40" height="40" class="rounded-circle">
         </a>
         <ul class="dropdown-menu text-small" aria-labelledby="btn-user">
-          <li><a class="dropdown-item" href="/admin" data-link>관리자</a></li>
+          <li${user.is_admin ? '':' style="display:none;"'}><a class="dropdown-item" href="/admin" data-link>관리자</a></li>
           <li><a class="dropdown-item" href="/profile" data-link>${user.username}님의 프로필</a></li>
           <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" id="btn-logout">Sign out</a></li>

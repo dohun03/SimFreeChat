@@ -1,4 +1,5 @@
 import { renderAdminUsers } from './users.js';
+import { renderAdminMessageLogs } from './messageLogs.js';
 
 export function renderAdmin(container, user, currentTab = 'users') {
   if (!user || !user.is_admin) {
@@ -16,13 +17,7 @@ export function renderAdmin(container, user, currentTab = 'users') {
               <a class="nav-link" href="#" data-tab="users">사용자 목록</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="#" data-tab="rooms">방 관리</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#" data-tab="logs">로그 확인</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="#" data-tab="settings">설정</a>
+              <a class="nav-link" href="#" data-tab="message-logs">메시지 로그 확인</a>
             </li>
           </ul>
         </nav>
@@ -65,14 +60,8 @@ function renderAdminContent(contentContainer, user, tab) {
     case 'users':
       renderAdminUsers(contentContainer, user);
       break;
-    case 'rooms':
-      contentContainer.innerHTML = '<p>방 관리 페이지 예시</p>';
-      break;
-    case 'logs':
-      contentContainer.innerHTML = '<p>로그 확인 페이지 예시</p>';
-      break;
-    case 'settings':
-      contentContainer.innerHTML = '<p>설정 페이지 예시</p>';
+    case 'message-logs':
+      renderAdminMessageLogs(contentContainer, user);
       break;
     default:
       contentContainer.innerHTML = '<p>선택된 메뉴가 없습니다.</p>';
