@@ -200,16 +200,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('sendMessage')
-  async handleSendMessage(client: Socket, payload: { roomId: number, content: string}) {
+  async handleSendMessage(client: Socket, payload: { roomId: number, content: string }) {
     try {
       const user = await this.getUserFromSession(client);
       const message = await this.messagesService.createMessage({
-        roomId: payload.roomId, 
-        userId: user.userId, 
+        roomId: payload.roomId,
+        userId: user.userId,
         content: payload.content
       });
   
-      this.server.to(payload.roomId.toString()).emit('chatMessage', message);
+      this.server.to(payload.roomId.toString()).emit('messageCreated', message);
+    } catch (err) {
+      console.error(err.message);
+    }
+  }
+
+  @SubscribeMessage('deleteMessage')
+  async handleDeleteMessage(client: Socket, payload: { roomId: number, messageId: number }) {
+    try {
+      const user = await this.getUserFromSession(client);
+      const messageId = await this.messagesService.deleteMessage(
+        payload.roomId,
+        user.userId,
+        payload.messageId
+      );
+  
+      this.server.to(payload.roomId.toString()).emit('messageDeleted', messageId);
     } catch (err) {
       console.error(err.message);
     }

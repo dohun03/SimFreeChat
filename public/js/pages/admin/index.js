@@ -2,7 +2,7 @@ import { renderAdminUsers } from './users.js';
 import { renderAdminMessageLogs } from './messageLogs.js';
 
 export function renderAdmin(container, user, currentTab = 'users') {
-  if (!user || !user.is_admin) {
+  if (!user || !user.isAdmin) {
     container.innerHTML = '<h2 class="text-center mt-5">관리자 권한이 필요합니다.</h2>';
     return;
   }

@@ -19,8 +19,8 @@ export async function renderProfile(container, user) {
       </form>
       <p id="profile-msg" class="text-danger mt-2"></p>
       <div class="mt-3 text-muted small">
-      <p>가입일: ${formatDate(user.created_at)}</p>
-      <p>최근 수정일: ${user.created_at!==user.updated_at ? formatDate(user.updated_at) : '없음'}</p>
+      <p>가입일: ${formatDate(user.createdAt)}</p>
+      <p>최근 수정일: ${user.createdAt!==user.updatedAt ? formatDate(user.updatedAt) : '없음'}</p>
     </div>
     </div>
   `;

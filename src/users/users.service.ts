@@ -78,7 +78,7 @@ export class UsersService {
     const admin = await this.userRepository.findOne({
       where: { id: session.userId }
     });
-    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
 
     const where: any = new Object();
 
@@ -88,7 +88,7 @@ export class UsersService {
 
     const users = await this.userRepository.find({
       where,
-      select: ['id', 'name', 'email', 'is_admin', 'created_at', 'updated_at']
+      select: ['id', 'name', 'email', 'isAdmin', 'createdAt', 'updatedAt']
     });
     if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
@@ -150,15 +150,15 @@ export class UsersService {
 
     const admin = await this.userRepository.findOne({
       where: { id: session.userId },
-      select: ['id', 'is_admin']
+      select: ['id', 'isAdmin']
     });
-    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
-    if (user.is_admin) throw new UnauthorizedException('관리자 정보는 수정할 수 없습니다.');
+    if (user.isAdmin) throw new UnauthorizedException('관리자 정보는 수정할 수 없습니다.');
 
     if (updateUserDto.name) user.name = updateUserDto.name;
 
@@ -183,16 +183,16 @@ export class UsersService {
 
     const admin = await this.userRepository.findOne({
       where: { id: session.userId },
-      select: ['id', 'is_admin']
+      select: ['id', 'isAdmin']
     });
-    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'is_admin']
+      select: ['id', 'isAdmin']
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
-    if (user.is_admin) throw new UnauthorizedException('관리자 정보는 삭제할 수 없습니다.');
+    if (user.isAdmin) throw new UnauthorizedException('관리자 정보는 삭제할 수 없습니다.');
     try {
       await this.chatService.leaveAllRooms(userId);
       const result = await this.userRepository.delete({

@@ -1,7 +1,7 @@
 import { router, formatDate } from "../../app.js";
 
 export async function renderAdminUsers(container, user) {
-  if (!user || !user.is_admin) {
+  if (!user || !user.isAdmin) {
     container.innerHTML = '<h2 class="text-center mt-5">권한이 없습니다.</h2>';
     return;
   }
@@ -66,8 +66,8 @@ export async function renderAdminUsers(container, user) {
           <td>${user.id}</td>
           <td>${user.name}</td>
           <td>${user.email}</td>
-          <td>${formatDate(user.created_at)}</td>
-          <td>${user.is_admin ? '<b>관리자</b>' : '사용자'}</td>
+          <td>${formatDate(user.createdAt)}</td>
+          <td>${user.isAdmin ? '<b>관리자</b>' : '사용자'}</td>
         `;
         userTableBody.appendChild(tr);
       });

@@ -1,7 +1,7 @@
 import { formatDate, router } from '../../app.js';
 
 export async function renderEditUser(container, user, userId) {
-  if (!user || !user.is_admin) {
+  if (!user || !user.isAdmin) {
     container.innerHTML = '<h2 class="text-center mt-5">권한이 없습니다.</h2>';
     return;
   }
@@ -27,8 +27,8 @@ export async function renderEditUser(container, user, userId) {
       </form>
       <p id="profile-msg" class="text-danger mt-2"></p>
       <div class="mt-3 text-muted small">
-        <p>가입일: ${formatDate(userData.created_at)}</p>
-        <p>최근 수정일: ${userData.created_at !== userData.updated_at ? formatDate(userData.updated_at) : '없음'}</p>
+        <p>가입일: ${formatDate(userData.createdAt)}</p>
+        <p>최근 수정일: ${userData.createdAt !== userData.updatedAt ? formatDate(userData.updatedAt) : '없음'}</p>
       </div>
     </div>
   `;

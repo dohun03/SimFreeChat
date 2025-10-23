@@ -14,21 +14,21 @@ export class User {
   @Column({ length: 100, unique: true })
   email: string;
 
-  @Column({ default: false })
-  is_admin: boolean;
+  @Column({ name: 'is_admin', default: false })
+  isAdmin: boolean;
 
-  @Column({ default: false })
-  is_banned: boolean;
+  @Column({ name: 'is_banned', default: false })
+  isBanned: boolean;
 
-  @Column({ length: 50, nullable: true })
-  ban_reason: string;
+  @Column({ name: 'ban_reason', length: 50, nullable: true })
+  banReason: string;
 
-  @Column({ length: 50, nullable: true })
-  ip_address: string;
+  @Column({ name: 'ip_address', length: 50, nullable: true })
+  ipAddress: string;
 
-  @CreateDateColumn()
-  created_at: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
-  @UpdateDateColumn()
-  updated_at: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

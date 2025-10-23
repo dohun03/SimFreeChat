@@ -1,7 +1,7 @@
 import { router, formatDate } from "../../app.js";
 
 export async function renderAdminMessageLogs(container, user) {
-  if (!user || !user.is_admin) {
+  if (!user || !user.isAdmin) {
     container.innerHTML = '<h2 class="text-center mt-5">권한이 없습니다.</h2>';
     return;
   }
@@ -147,13 +147,13 @@ export async function renderAdminMessageLogs(container, user) {
         tr.dataset.id = log.id;
         tr.innerHTML = `
           <td>${log.id}</td>
-          <td>${log.room_id}</td>
-          <td>${log.room_name}</td>
-          <td>${log.user_id}</td>
-          <td class="text-truncate" style="max-width: 150px;">${log.user_name}</td>
-          <td class="text-truncate" style="max-width: 200px;">${log.message_content}</td>
+          <td>${log.roomId}</td>
+          <td>${log.roomName}</td>
+          <td>${log.userId}</td>
+          <td class="text-truncate" style="max-width: 150px;">${log.userName}</td>
+          <td class="text-truncate" style="max-width: 200px;">${log.messageContent}</td>
           <td>${log.action}</td>
-          <td>${formatDate(log.created_at)}</td>
+          <td>${formatDate(log.createdAt)}</td>
         `;
         tableBody.appendChild(tr);
       });

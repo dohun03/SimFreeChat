@@ -25,12 +25,12 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) throw new UnauthorizedException('아이디 또는 비밀번호가 올바르지 않습니다.');
 
-    if (user.is_banned) throw new ForbiddenException('차단 되어있는 사용자입니다.');
+    if (user.isBanned) throw new ForbiddenException('차단 되어있는 사용자입니다.');
 
     const sessionId = uuid();
     await this.redisService.createSession(sessionId, { 
       userId: user.id,
-      isAdmin: user.is_admin,
+      isAdmin: user.isAdmin,
     });
 
     const { password: removed, ...safeUser } = user;

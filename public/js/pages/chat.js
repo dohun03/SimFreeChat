@@ -48,17 +48,60 @@ export async function renderChatRoom(container, user, roomId) {
     `;
   }
 
+  function createMessageElement(msg, currentUserId) {
+    const createdAt = formatDate(msg.createdAt);
+    const isMine = msg.user.id === currentUserId;
+  
+    const li = document.createElement('li');
+    li.classList.add('list-group-item', 'chat-message', 'position-relative', 'py-2');
+    li.dataset.id = msg.id;
+  
+    if (isMine) li.classList.add('bg-light', 'mine');
+  
+    li.innerHTML = `
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1 me-4">
+          <small class="text-muted d-block mb-1">${createdAt}</small>
+          <strong class="text-${isMine ? 'primary' : 'dark'} d-block">${escapeHtml(msg.user.name)}</strong>
+          <div class="chat-content">${msg.isDeleted ? 
+            '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>' : escapeHtml(msg.content)
+          }
+          </div>
+        </div>
+      </div>
+      ${isMine ? 
+        `<button class="btn btn-sm btn-outline-danger delete-btn position-absolute top-0 end-0 mt-1 me-1" style="opacity: 0; transition: opacity 0.2s;">
+          <i class="bi bi-trash"></i>
+        </button>` : ''
+      }
+    `;
+  
+    // 내용 스타일
+    const contentDiv = li.querySelector('.chat-content');
+    contentDiv.style.whiteSpace = 'pre-line';
+    contentDiv.style.wordBreak = 'break-word';
+  
+    // 마우스 이벤트 (일렁임 없이 삭제 버튼 표시)
+    if (isMine) {
+      const deleteBtn = li.querySelector('.delete-btn');
+      li.addEventListener('mouseenter', () => (deleteBtn.style.opacity = '1'));
+      li.addEventListener('mouseleave', () => (deleteBtn.style.opacity = '0'));
+    }
+  
+    return li;
+  }
+
   try {
     // 방 정보 조회
     const roomResponse = await fetch(`/api/rooms/${roomId}`, {
       method: 'GET',
       credentials: 'include',
     });
-    const room = await roomResponse.json();
     if (!roomResponse.ok) {
       container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
+    const room = await roomResponse.json();
     const isOwner = room.owner.id===user.id;
 
     container.innerHTML = `
@@ -276,7 +319,7 @@ export async function renderChatRoom(container, user, roomId) {
       
             document.getElementById('modal-name').textContent = targetUser.name;
             document.getElementById('modal-email').textContent = targetUser.email || '-';
-            document.getElementById('modal-created').textContent = formatDate(targetUser.created_at);
+            document.getElementById('modal-created').textContent = formatDate(targetUser.createdAt);
       
             const modalEl = document.getElementById('userInfoModal');
             const modal = new bootstrap.Modal(document.getElementById('userInfoModal'));
@@ -303,26 +346,10 @@ export async function renderChatRoom(container, user, roomId) {
     const messages = await res.json();
 
     messages.forEach(msg => {
-      const createdAt = formatDate(msg.created_at);
-
-      const li = document.createElement('li');
-      li.classList.add('list-group-item');
-      li.dataset.id = msg.id;
-
-      const isMine = msg.user.id === user.id;
-      if (isMine) li.classList.add('bg-light');
-
-      li.innerHTML = `
-        <div class="d-flex justify-content-between">
-          <div class="me-2">
-            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(msg.user.name)}</strong><br>
-            <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(msg.content)}</div>
-          </div>
-          <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>
-        </div>
-      `;
+      const li = createMessageElement(msg, user.id);
       messagesList.appendChild(li);
     });
+
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     // 입력 칸 높이 조절 함수
@@ -360,25 +387,8 @@ export async function renderChatRoom(container, user, roomId) {
     }
 
     // [새 채팅 메시지 출력 Event]
-    socket.on('chatMessage', data => {
-      const createdAt = formatDate(data.created_at);
-
-      const li = document.createElement('li');
-      li.classList.add('list-group-item');
-      li.dataset.id = data.id;
-
-      const isMine = data.user.id === user.id;
-      if (isMine) li.classList.add('bg-light');
-
-      li.innerHTML = `
-        <div class="d-flex justify-content-between">
-          <div class="me-2">
-            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(data.user.name)}</strong><br>
-            <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(data.content)}</div>
-          </div>
-          <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>
-        </div>
-      `;
+    socket.on('messageCreated', data => {
+      const li = createMessageElement(data, user.id);
       messagesList.appendChild(li);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
@@ -387,6 +397,26 @@ export async function renderChatRoom(container, user, roomId) {
     chatReset.addEventListener('click', () => {
       chatInput.value = '';
       resizeTextarea();
+    });
+
+    // 메시지 삭제
+    messagesList.addEventListener('click', async (e) => {
+      const deleteBtn = e.target.closest('.delete-btn');
+      if (!deleteBtn) return;
+    
+      const messageItem = deleteBtn.closest('.chat-message');
+      const messageId = messageItem.dataset.id;
+    
+      if (confirm('이 메시지를 삭제하시겠습니까?')) {
+        socket.emit('deleteMessage', { roomId, messageId });
+      }
+    });
+
+    // [메시지 삭제 Event]
+    socket.on('messageDeleted', messageId => {
+      showSystemMessage(`${messageId}번 메시지가 삭제되었습니다.`);
+      const content = document.querySelector(`li[data-id="${messageId}"] .chat-content`);
+      content.innerHTML = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
     });
 
     // 메시지 검색
@@ -449,7 +479,7 @@ export async function renderChatRoom(container, user, roomId) {
       }, 3000);
     }
 
-    // 위로 이동 버튼
+    // 메시지 검색 위로 이동 버튼
     chatSearchUp.addEventListener('click', () => {
       if (!searchArray || searchArray.length === 0) {
         showSystemMessage('검색 결과가 없습니다.');
@@ -466,7 +496,7 @@ export async function renderChatRoom(container, user, roomId) {
       highlightMessage(targetId);
     });
 
-    // 아래로 이동 버튼
+    // 메시지 아래로 이동 버튼
     chatSearchDown.addEventListener('click', () => {
       if (!searchArray || searchArray.length === 0) {
         showSystemMessage('검색 결과가 없습니다.');
@@ -486,7 +516,7 @@ export async function renderChatRoom(container, user, roomId) {
     // 채팅방 수정 페이지
     chatEdit.addEventListener('click', () => {
       window.open(`/edit-room/${roomId}`, '_blank');
-    })
+    });
   } catch (err) {
     container.textContent = `서버 에러가 발생했습니다. ${err}`;
   }

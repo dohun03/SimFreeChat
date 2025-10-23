@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
@@ -52,7 +52,7 @@ export class MessagesService {
       });
       await this.messageLogRepository.save(newMessageLog);
       
-      const { password, ip_address, ...safeUser } = user;
+      const { password, ipAddress: ip_address, ...safeUser } = user;
       return {
         ...message,
         user: safeUser,
@@ -60,6 +60,39 @@ export class MessagesService {
     } catch (err) {
       console.error('메시지 생성 중 에러:', err);
       throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
+    }
+  }
+
+  async deleteMessage(roomId: number, userId: number, messageId: number) {
+    try {
+      const message = await this.messageRepository.findOne({
+        where: {
+          id: messageId,
+          room: { id: roomId },
+          user: { id: userId },
+        }
+      });
+      if (!message || message.isDeleted) throw new BadRequestException('메시지를 삭제할 수 없습니다.');
+  
+      message.isDeleted = true;
+
+      await this.messageRepository.save(message);
+
+      const deletedMessageLog = this.messageLogRepository.create({
+        roomId: message.room.id,
+        roomName: message.room.name,
+        userId: message.user.id,
+        userName: message.user.name,
+        messageId: message.id,
+        messageContent: message.content,
+        action: 'DELETE'
+      });
+      await this.messageLogRepository.save(deletedMessageLog);
+
+      return message.id;
+    } catch (err) {
+      console.error('메시지 삭제 실패:', err);
+      throw new InternalServerErrorException('서버에서 메시지 삭제 중 오류가 발생했습니다.');
     }
   }
 
@@ -78,7 +111,7 @@ export class MessagesService {
     });
 
     return messages.map((msg) => {
-      const { password, ip_address, ...safeUser } = msg.user;
+      const { password, ipAddress: ip_address, ...safeUser } = msg.user;
       return {
         ...msg,
         user: safeUser
@@ -93,8 +126,8 @@ export class MessagesService {
     const admin = await this.userRepository.findOne({
       where: { id: session.userId },
     });
-    if (!admin?.is_admin) throw new UnauthorizedException('권한이 없습니다.');
-
+    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
+  
     try {
       const {
         search,
@@ -105,68 +138,61 @@ export class MessagesService {
         line,
         currentPage,
       } = query;
-    
-      const whereParams: any[] = [];
-      let whereSql = ' WHERE 1=1';
-    
+  
+      const limit = Number(line) || 10;
+      const page = Number(currentPage) || 1;
+      const offset = (page - 1) * limit;
+  
+      const qb = this.messageLogRepository.createQueryBuilder('log');
+  
       // 검색 조건
       if (search) {
         switch (searchType) {
           case 'message':
-            whereSql += ' AND message_content LIKE ?';
-            whereParams.push(`%${search}%`);
+            qb.andWhere('log.message_content LIKE :search', { search: `%${search}%` });
             break;
           case 'user':
-            whereSql += ' AND user_name LIKE ?';
-            whereParams.push(`%${search}%`);
+            qb.andWhere('log.user_name LIKE :search', { search: `%${search}%` });
             break;
           case 'room':
-            whereSql += ' AND room_name LIKE ?';
-            whereParams.push(`%${search}%`);
+            qb.andWhere('log.room_name LIKE :search', { search: `%${search}%` });
             break;
           default:
-            whereSql += ' AND (message_content LIKE ? OR user_name LIKE ? OR room_name LIKE ?)';
-            whereParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+            qb.andWhere(
+              '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)',
+              { search: `%${search}%` },
+            );
             break;
         }
       }
-    
+  
       // 액션 타입 조건
       if (actionType) {
-        whereSql += ' AND action = ?';
-        whereParams.push(actionType);
+        qb.andWhere('log.action = :action', { action: actionType });
       }
-    
+  
       // 날짜 조건
       if (startDate) {
-        whereSql += ' AND created_at >= ?';
-        whereParams.push(startDate);
+        qb.andWhere('log.created_at >= :startDate', { startDate });
       }
-    
       if (endDate) {
-        whereSql += ' AND created_at <= ?';
-        whereParams.push(`${endDate} 23:59:59`);
+        qb.andWhere('log.created_at <= :endDate', { endDate: `${endDate} 23:59:59` });
       }
-    
+  
       // 전체 개수 조회
-      const countSql = `SELECT COUNT(*) AS total FROM message_log${whereSql}`;
-      const countResult = await this.messageLogRepository.query(countSql, whereParams);
-      const totalCount = countResult[0]?.total || 0;
-    
+      const totalCount = await qb.getCount();
+  
       // 데이터 조회 (페이징)
-      const limit = Number(line) || 10;
-      const offset = ((Number(currentPage) || 1) - 1) * limit;
-      const dataSql = `SELECT * FROM message_log${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-      const dataParams = [...whereParams, limit, offset];
-      const messageLogs = await this.messageLogRepository.query(dataSql, dataParams);
-    
-      return {
-        messageLogs,
-        totalCount,
-      };
+      const messageLogs = await qb
+        .orderBy('log.created_at', 'DESC')
+        .limit(limit)
+        .offset(offset)
+        .getMany();
+  
+      return { messageLogs, totalCount };
     } catch (err) {
       console.error('메시지 로그 조회 중 오류 발생:', err);
       throw new InternalServerErrorException('메시지 로그 조회 중 문제가 발생했습니다.');
     }
-  }
+  }  
 }

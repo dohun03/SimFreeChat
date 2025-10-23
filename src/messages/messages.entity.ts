@@ -7,7 +7,7 @@ export class Message {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Room, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Room, { onDelete: 'CASCADE', eager: true })
   @JoinColumn({ name: 'room_id' })
   @Index()
   room: Room;
@@ -19,9 +19,12 @@ export class Message {
   @Column('text')
   content: string;
 
-  @CreateDateColumn()
-  created_at: Date;
+  @Column({ name: 'is_deleted', type: 'boolean', default: false })
+  isDeleted: boolean;
 
-  @UpdateDateColumn()
-  updated_at: Date;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }
