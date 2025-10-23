@@ -43,9 +43,9 @@ export class MessagesService {
   
       const newMessageLog = this.messageLogRepository.create({
         roomId: room.id,
-        roomname: room.name,
+        roomName: room.name,
         userId: user.id,
-        username: user.username,
+        userName: user.name,
         messageId: message.id,
         messageContent: message.content,
         action: 'SEND'
@@ -117,15 +117,15 @@ export class MessagesService {
             whereParams.push(`%${search}%`);
             break;
           case 'user':
-            whereSql += ' AND username LIKE ?';
+            whereSql += ' AND user_name LIKE ?';
             whereParams.push(`%${search}%`);
             break;
           case 'room':
-            whereSql += ' AND roomname LIKE ?';
+            whereSql += ' AND room_name LIKE ?';
             whereParams.push(`%${search}%`);
             break;
           default:
-            whereSql += ' AND (message_content LIKE ? OR username LIKE ? OR roomname LIKE ?)';
+            whereSql += ' AND (message_content LIKE ? OR user_name LIKE ? OR room_name LIKE ?)';
             whereParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
             break;
         }

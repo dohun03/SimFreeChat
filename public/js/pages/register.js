@@ -10,7 +10,7 @@ export function renderRegister(container, user) {
     <div class="card p-4 mx-auto" style="max-width: 400px;">
       <h2>회원가입</h2>
       <form id="register-form">
-        <input type="text" id="username" placeholder="아이디" class="form-control mb-2" required />
+        <input type="text" id="name" placeholder="아이디" class="form-control mb-2" required />
         <input type="email" id="email" placeholder="이메일" class="form-control mb-2" required />
         <input type="password" id="password" placeholder="비밀번호" class="form-control mb-2" required />
         <input type="password" id="confirmPassword" placeholder="비밀번호 확인" class="form-control mb-2" required />
@@ -24,7 +24,7 @@ export function renderRegister(container, user) {
   const form = document.getElementById('register-form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('username').value;
+    const name = document.getElementById('name').value;
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
@@ -39,7 +39,7 @@ export function renderRegister(container, user) {
       const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json();
       if (res.ok) {

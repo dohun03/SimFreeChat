@@ -41,7 +41,7 @@ export class ChatService {
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     const roomUsers = await this.userRepository.find({
       where: { id: In(roomUsersArray.map(userId => Number(userId))) },
-      select: ['id','username']
+      select: ['id','name']
     });
 
     return { roomUsers, afterCount, joinUser };
@@ -61,7 +61,7 @@ export class ChatService {
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     const roomUsers = await this.userRepository.find({
       where: { id: In(roomUsersArray.map(userId => Number(userId))) },
-      select: ['id','username']
+      select: ['id','name']
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
@@ -81,15 +81,15 @@ export class ChatService {
         const roomId = Number(key.split(':')[1]);
         const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
         if (!isUserInRoom) {
-          console.log(`${roomId}번 방에는 ${leaveUser.username}님이 존재하지 않습니다.`);
+          console.log(`${roomId}번 방에는 ${leaveUser.name}님이 존재하지 않습니다.`);
           return;
         }
-        console.log(`${roomId}번 방에서 ${leaveUser.username}님을 내보냈습니다.`);
+        console.log(`${roomId}번 방에서 ${leaveUser.name}님을 내보냈습니다.`);
         await this.redisService.removeUserFromRoom(roomId, userId);
         const roomUsersArray = await this.redisService.getRoomUsers(roomId);
         const roomUsers = await this.userRepository.find({
           where: { id: In(roomUsersArray.map(userId => Number(userId))) },
-          select: ['id','username']
+          select: ['id','name']
         });
         const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
@@ -128,14 +128,14 @@ export class ChatService {
 
     const kickedUser = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'username']
+      select: ['id', 'name']
     });
     if (!kickedUser) throw new BadRequestException('해당 유저가 없습니다.');
     
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     const roomUsers = await this.userRepository.find({
       where: { id: In(roomUsersArray.map(userId => Number(userId))) },
-      select: ['id','username']
+      select: ['id','name']
     });
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 

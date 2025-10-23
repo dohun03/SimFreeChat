@@ -64,7 +64,7 @@ export async function renderAdminUsers(container, user) {
         tr.dataset.id = user.id;
         tr.innerHTML = `
           <td>${user.id}</td>
-          <td>${user.username}</td>
+          <td>${user.name}</td>
           <td>${user.email}</td>
           <td>${formatDate(user.created_at)}</td>
           <td>${user.is_admin ? '<b>관리자</b>' : '사용자'}</td>

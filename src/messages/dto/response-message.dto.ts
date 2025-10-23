@@ -5,7 +5,7 @@ export class ResponseMessageDto {
   updated_at: Date;
   user: {
     id: number;
-    username: string;
+    name: string;
     is_admin: boolean;
     is_banned: boolean;
     created_at: Date;

@@ -14,9 +14,9 @@ export async function renderEditUser(container, user, userId) {
 
     container.innerHTML = `
     <div class="card p-4 mx-auto" style="max-width: 600px;">
-      <h2>${userData.username}님의 프로필 설정</h2>
+      <h2>${userData.name}님의 프로필 설정</h2>
       <form id="profile-form">
-        <input type="text" id="username" placeholder="현재 아이디: ${userData.username}" class="form-control mb-2" />
+        <input type="text" id="name" placeholder="현재 아이디: ${userData.name}" class="form-control mb-2" />
         <input type="email" id="email" placeholder="현재 이메일: ${userData.email}" class="form-control mb-2" />
         <input type="password" id="password" placeholder="새 비밀번호" class="form-control mb-2" />
         <input type="password" id="confirmPassword" placeholder="비밀번호 확인" class="form-control mb-2" />
@@ -43,7 +43,7 @@ export async function renderEditUser(container, user, userId) {
   // 🔹 프로필 수정 이벤트
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('username').value;
+    const name = document.getElementById('name').value;
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
@@ -54,7 +54,7 @@ export async function renderEditUser(container, user, userId) {
     }
 
     const payload = {};
-    if (username) payload.username = username;
+    if (name) payload.name = name;
     if (email) payload.email = email;
     if (password) payload.password = password;
 

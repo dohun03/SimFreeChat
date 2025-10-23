@@ -118,7 +118,7 @@ export class RoomsService {
             updatedAt: room.updatedAt,
             owner: {
               id: room.owner.id,
-              username: room.owner.username,
+              name: room.owner.name,
             }
           }
         })
@@ -149,7 +149,7 @@ export class RoomsService {
       updatedAt: room.updatedAt,
       owner: {
         id: room.owner.id,
-        username: room.owner.username,
+        name: room.owner.name,
       }
     }
   }

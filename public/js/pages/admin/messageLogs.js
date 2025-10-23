@@ -148,9 +148,9 @@ export async function renderAdminMessageLogs(container, user) {
         tr.innerHTML = `
           <td>${log.id}</td>
           <td>${log.room_id}</td>
-          <td>${log.roomname}</td>
+          <td>${log.room_name}</td>
           <td>${log.user_id}</td>
-          <td class="text-truncate" style="max-width: 150px;">${log.username}</td>
+          <td class="text-truncate" style="max-width: 150px;">${log.user_name}</td>
           <td class="text-truncate" style="max-width: 200px;">${log.message_content}</td>
           <td>${log.action}</td>
           <td>${formatDate(log.created_at)}</td>

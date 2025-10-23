@@ -19,16 +19,16 @@ export class UsersService {
 
   //회원가입
   async createUser(createUserDto: CreateUserDto) {
-    const { username, password, email } = createUserDto;
+    const { name, password, email } = createUserDto;
     const existingUser = await this.userRepository.findOne({
-      where: [{ username }, { email }] // OR 조건문
+      where: [{ name }, { email }] // OR 조건문
     });
     if (existingUser) throw new BadRequestException('이미 존재하는 사용자명 또는 이메일입니다.');
   
     const hashedPassword = await bcrypt.hash(password, 10);
   
     const newUser = this.userRepository.create({
-      username,
+      name,
       password: hashedPassword,
       email,
     });
@@ -83,12 +83,12 @@ export class UsersService {
     const where: any = new Object();
 
     if (search) {
-      where.username = Like(`%${search}%`);
+      where.name = Like(`%${search}%`);
     }
 
     const users = await this.userRepository.find({
       where,
-      select: ['id', 'username', 'email', 'is_admin', 'created_at', 'updated_at']
+      select: ['id', 'name', 'email', 'is_admin', 'created_at', 'updated_at']
     });
     if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
@@ -106,13 +106,13 @@ export class UsersService {
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
     // 닉네임 변경
-    if (updateUserDto.username) {
+    if (updateUserDto.name) {
       const existingUser = await this.userRepository.findOne({
-        where: { username: updateUserDto.username },
+        where: { name: updateUserDto.name },
       });
       if (existingUser) throw new BadRequestException('이미 존재하는 사용자명입니다.');
 
-      user.username = updateUserDto.username;
+      user.name = updateUserDto.name;
     }
 
     // 비밀번호 변경
@@ -160,7 +160,7 @@ export class UsersService {
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
     if (user.is_admin) throw new UnauthorizedException('관리자 정보는 수정할 수 없습니다.');
 
-    if (updateUserDto.username) user.username = updateUserDto.username;
+    if (updateUserDto.name) user.name = updateUserDto.name;
 
     if (updateUserDto.password) user.password = await bcrypt.hash(updateUserDto.password, 10);
 

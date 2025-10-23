@@ -8,14 +8,14 @@ export class MessageLog {
   @Column({ name: 'room_id' })
   roomId: number;
 
-  @Column({ length: 100 })
-  roomname: string;
+  @Column({ name: 'room_name', length: 100 })
+  roomName: string;
 
   @Column({ name: 'user_id' })
   userId: number;
 
-  @Column({ length: 50 })
-  username: string;
+  @Column({ name: 'user_name', length: 50 })
+  userName: string;
 
   @Column({ name: 'message_id' })
   messageId: number;

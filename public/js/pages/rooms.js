@@ -57,7 +57,7 @@ export function renderRoomsList(container) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(room.name)}</td>
-          <td class="text-center">${escapeHtml(room.owner.username)}</td>
+          <td class="text-center">${escapeHtml(room.owner.name)}</td>
           <td class="text-center">${room.currentMembers} / ${room.maxMembers}</td>
           <td class="text-center">${room.password ? '🔒 비공개' : '🌐 공개'}</td>
         `;

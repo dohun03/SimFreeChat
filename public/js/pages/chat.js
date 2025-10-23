@@ -131,7 +131,7 @@ export async function renderChatRoom(container, user, roomId) {
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <p><strong>아이디:</strong> <span id="modal-username"></span></p>
+              <p><strong>아이디:</strong> <span id="modal-name"></span></p>
               <p><strong>이메일:</strong> <span id="modal-email"></span></p>
               <p><strong>가입일:</strong> <span id="modal-created"></span></p>
             </div>
@@ -216,7 +216,7 @@ export async function renderChatRoom(container, user, roomId) {
     
         // 유저 이름
         const nameSpan = document.createElement('span');
-        nameSpan.textContent = u.username;
+        nameSpan.textContent = u.name;
     
         // 방장일 경우
         if (room.owner.id === u.id) {
@@ -274,7 +274,7 @@ export async function renderChatRoom(container, user, roomId) {
             if (!res.ok) throw new Error('유저 정보를 가져올 수 없습니다.');
             const targetUser = await res.json();
       
-            document.getElementById('modal-username').textContent = targetUser.username;
+            document.getElementById('modal-name').textContent = targetUser.name;
             document.getElementById('modal-email').textContent = targetUser.email || '-';
             document.getElementById('modal-created').textContent = formatDate(targetUser.created_at);
       
@@ -315,7 +315,7 @@ export async function renderChatRoom(container, user, roomId) {
       li.innerHTML = `
         <div class="d-flex justify-content-between">
           <div class="me-2">
-            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(msg.user.username)}</strong><br>
+            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(msg.user.name)}</strong><br>
             <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(msg.content)}</div>
           </div>
           <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>
@@ -373,7 +373,7 @@ export async function renderChatRoom(container, user, roomId) {
       li.innerHTML = `
         <div class="d-flex justify-content-between">
           <div class="me-2">
-            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(data.user.username)}</strong><br>
+            <strong class="text-${isMine ? 'primary' : 'dark'}">${escapeHtml(data.user.name)}</strong><br>
             <div style="white-space: pre-wrap; word-break: break-word">${escapeHtml(data.content)}</div>
           </div>
           <small class="text-muted flex-shrink-0 ms-2">${createdAt}</small>

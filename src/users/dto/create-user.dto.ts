@@ -6,7 +6,7 @@ export class CreateUserDto {
   @Matches(/^(?:[가-힣]{2,12}|[a-zA-Z0-9]{2,12})$/, {
     message: '아이디는 한글(2~12자) 또는 영문/숫자 조합(2~12자)만 가능합니다.',
   })
-  username: string;
+  name: string;
 
   @IsNotEmpty({ message: '비밀번호를 입력해주세요.' })
   @IsString()

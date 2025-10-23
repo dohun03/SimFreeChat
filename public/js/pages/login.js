@@ -10,7 +10,7 @@ export function renderLogin(container, user) {
     <div class="card p-4 mx-auto" style="max-width: 400px;">
       <h2>로그인</h2>
       <form id="login-form">
-        <input type="text" id="username" placeholder="아이디" class="form-control mb-2" required />
+        <input type="text" id="name" placeholder="아이디" class="form-control mb-2" required />
         <input type="password" id="password" placeholder="비밀번호" class="form-control mb-2" required />
         <button type="submit" class="btn btn-primary w-100">로그인</button>
       </form>
@@ -21,14 +21,14 @@ export function renderLogin(container, user) {
 
   document.querySelector('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('username').value;
+    const name = document.getElementById('name').value;
     const password = document.getElementById('password').value;
 
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ name, password }),
         credentials: 'include',
       });
       const data = await res.json();

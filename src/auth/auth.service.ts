@@ -17,9 +17,9 @@ export class AuthService {
 
   // 로그인 로직
   async logIn(loginUserDto: LoginUserDto) {
-    const { username, password } = loginUserDto;
+    const { name, password } = loginUserDto;
 
-    const user = await this.userRepository.findOne({ where: { username }});
+    const user = await this.userRepository.findOne({ where: { name: name }});
     if (!user) throw new UnauthorizedException('아이디 또는 비밀번호가 올바르지 않습니다.');
 
     const isPasswordValid = await bcrypt.compare(password, user.password);

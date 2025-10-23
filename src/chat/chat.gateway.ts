@@ -120,7 +120,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       // 방 전체에 입장 메시지 전송
       this.server.to(roomId.toString()).emit('systemMessage', {
-        msg: `${joinUser.username} 님이 입장했습니다.`,
+        msg: `${joinUser.name} 님이 입장했습니다.`,
         roomUsers,
         roomUserCount: afterCount,
       });
@@ -140,7 +140,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       // 방 전체에 퇴장 메시지 전송
       this.server.to(payload.roomId.toString()).emit('systemMessage', {
-        msg: `${leaveUser.username} 님이 퇴장했습니다.`,
+        msg: `${leaveUser.name} 님이 퇴장했습니다.`,
         roomUsers,
         roomUserCount,
       });
@@ -163,7 +163,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.removeUserSocket(roomId, deletedUser.id);
     
     this.server.to(roomId.toString()).emit('systemMessage', {
-      msg: `${deletedUser.username} 님이 퇴장했습니다.`,
+      msg: `${deletedUser.name} 님이 퇴장했습니다.`,
       roomUsers,
       roomUserCount,
     });
@@ -224,7 +224,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.removeUserSocket(roomId, userId);
 
       this.server.to(roomId.toString()).emit('systemMessage', {
-        msg: `${kickedUser.username} 님을 퇴장시켰습니다.`,
+        msg: `${kickedUser.name} 님을 퇴장시켰습니다.`,
         roomUsers,
         roomUserCount,
       });
