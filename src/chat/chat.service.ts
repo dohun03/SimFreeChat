@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
@@ -116,13 +116,15 @@ export class ChatService {
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
 
-    const isOwner = await this.roomRepository.findOne({
+    const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
         owner: owner.userId
       }
     });
-    if (!isOwner) throw new UnauthorizedException('권한이 없습니다');
+    if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
+    if (room.owner.id!==owner.userId) throw new UnauthorizedException('권한이 없습니다.');
+    if (room.owner.id === userId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
 
     await this.redisService.removeUserFromRoom(roomId, userId);
 

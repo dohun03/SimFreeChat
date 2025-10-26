@@ -12,6 +12,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { MessagesService } from 'src/messages/messages.service';
 import { map } from 'rxjs';
 import { UnauthorizedException } from '@nestjs/common';
+import { RoomUsersService } from 'src/room-users/room-users.service';
 
 @WebSocketGateway({
   cors: {
@@ -30,6 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly chatService: ChatService,
     private readonly messagesService: MessagesService,
+    private readonly roomUsersService: RoomUsersService,
     private redisService: RedisService,
   ) {}
   
@@ -119,7 +121,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.join(roomId.toString());
   
       // 방 전체에 입장 메시지 전송
-      this.server.to(roomId.toString()).emit('systemMessage', {
+      this.server.to(roomId.toString()).emit('roomEvent', {
         msg: `${joinUser.name} 님이 입장했습니다.`,
         roomUsers,
         roomUserCount: afterCount,
@@ -139,7 +141,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.leave(payload.roomId.toString());
   
       // 방 전체에 퇴장 메시지 전송
-      this.server.to(payload.roomId.toString()).emit('systemMessage', {
+      this.server.to(payload.roomId.toString()).emit('roomEvent', {
         msg: `${leaveUser.name} 님이 퇴장했습니다.`,
         roomUsers,
         roomUserCount,
@@ -162,7 +164,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     
     this.removeUserSocket(roomId, deletedUser.id);
     
-    this.server.to(roomId.toString()).emit('systemMessage', {
+    this.server.to(roomId.toString()).emit('roomEvent', {
       msg: `${deletedUser.name} 님이 퇴장했습니다.`,
       roomUsers,
       roomUserCount,
@@ -192,7 +194,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.removeUserSocket(roomId, userId);
 
     // 특정 사용자에게만 메시지 전송
-    this.server.to(socketId).emit('systemMessage', {
+    this.server.to(socketId).emit('roomEvent', {
       msg: '방이 삭제되었습니다.',
       roomUsers: [],
       roomUserCount: 0,
@@ -232,15 +234,34 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('kickUser')
-  async handleKickuser(client: Socket, payload: { roomId: number, userId: number }) {
+  async handleKickUser(client: Socket, payload: { roomId: number, userId: number }) {
     try {
       const owner = await this.getUserFromSession(client);
       const { roomId, userId } = payload;
       const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
       this.removeUserSocket(roomId, userId);
 
-      this.server.to(roomId.toString()).emit('systemMessage', {
+      this.server.to(roomId.toString()).emit('roomEvent', {
         msg: `${kickedUser.name} 님을 퇴장시켰습니다.`,
+        roomUsers,
+        roomUserCount,
+      });
+    } catch (err) {
+      console.error(err.message);
+    }
+  }
+
+  @SubscribeMessage('banUser')
+  async handleBanUser(client: Socket, payload: { roomId: number, userId: number, banReason: string }) {
+    try {
+      const owner = await this.getUserFromSession(client);
+      const { roomId, userId, banReason } = payload;
+      await this.roomUsersService.banUser(roomId, userId, owner, banReason);
+      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
+      this.removeUserSocket(roomId, userId);
+
+      this.server.to(roomId.toString()).emit('roomEvent', {
+        msg: `${kickedUser.name} 님을 밴했습니다.`,
         roomUsers,
         roomUserCount,
       });

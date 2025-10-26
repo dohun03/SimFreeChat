@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { RoomUser } from 'src/room-users/room-user.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../users/users.entity';
 
 @Entity()
@@ -18,6 +19,9 @@ export class Room {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   password: string | null;
+  
+  @OneToMany(() => RoomUser, (roomUser) => roomUser.room)
+  roomUsers: RoomUser[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

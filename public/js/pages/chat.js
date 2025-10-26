@@ -3,6 +3,15 @@ import { escapeHtml, formatDate, router } from '../app.js'
 let socket = null;
 let currentRoomId = null;
 
+function closeSocketConnection() {
+  if (socket) {
+    socket.off();
+    socket.disconnect();
+    socket = null;
+    console.log('소켓 연결 종료됨');
+  }
+}
+
 export async function renderChatRoom(container, user, roomId) {
   if (!user) {
     history.pushState(null, '', '/login');
@@ -69,7 +78,7 @@ export async function renderChatRoom(container, user, roomId) {
           </div>
         </div>
       </div>
-      ${isMine ? 
+      ${isMine & !msg.isDeleted ? 
         `<button class="btn btn-sm btn-outline-danger delete-btn position-absolute top-0 end-0 mt-1 me-1" style="opacity: 0; transition: opacity 0.2s;">
           <i class="bi bi-trash"></i>
         </button>` : ''
@@ -81,7 +90,7 @@ export async function renderChatRoom(container, user, roomId) {
     contentDiv.style.whiteSpace = 'pre-line';
     contentDiv.style.wordBreak = 'break-word';
   
-    // 마우스 이벤트 (일렁임 없이 삭제 버튼 표시)
+    // 삭제 버튼 표시
     if (isMine) {
       const deleteBtn = li.querySelector('.delete-btn');
       li.addEventListener('mouseenter', () => (deleteBtn.style.opacity = '1'));
@@ -93,23 +102,40 @@ export async function renderChatRoom(container, user, roomId) {
 
   try {
     // 방 정보 조회
-    const roomResponse = await fetch(`/api/rooms/${roomId}`, {
+    const roomRes = await fetch(`/api/rooms/${roomId}`, {
       method: 'GET',
       credentials: 'include',
     });
-    if (!roomResponse.ok) {
+    if (!roomRes.ok) {
       container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
       return;
     }
-    const room = await roomResponse.json();
+    const room = await roomRes.json();
     const isOwner = room.owner.id===user.id;
+    
+    // 밴 정보 조회
+    const bannedUsersRes = await fetch(`/api/room-users/${roomId}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!bannedUsersRes.ok) {
+      container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
+      return;
+    }
+    const bannedUsers = await bannedUsersRes.json();
+    let isBanned = false;
+    bannedUsers.forEach(b => {
+      if (b.user.id===user.id) {
+        isBanned = true;
+      }
+    });
 
     container.innerHTML = `
       <div class="mt-3 mb-2 d-flex justify-content-between align-items-center">
         <!-- 왼쪽: 제목 + 수정 버튼 -->
         <div class="d-flex align-items-center gap-2">
           <h3 id="room-name" class="mb-0 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
-          <button type="button" id="chat-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">수정</button>
+          <button type="button" id="chat-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">채팅방 관리</button>
         </div>
 
         <!-- 오른쪽: 검색창 -->
@@ -209,8 +235,15 @@ export async function renderChatRoom(container, user, roomId) {
       // reconnectionDelay: 2000,
     });
 
+    if (isBanned) {
+      showErrorMessage('이 방에서 밴 처리된 사용자입니다.');
+      closeSocketConnection();
+      return;
+    }
+
     if (room.currentMembers>=room.maxMembers) {
       showErrorMessage('방의 인원이 가득 찼습니다.');
+      closeSocketConnection();
       return;
     }
 
@@ -218,6 +251,7 @@ export async function renderChatRoom(container, user, roomId) {
       const password = prompt('비밀번호를 입력하세요');
       if (!password) {
         showErrorMessage('비밀번호를 입력하세요.');
+        closeSocketConnection();
         return;
       }
       socket.emit('joinRoom', { roomId, password });
@@ -247,7 +281,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // [공용 UI 소켓 Event]
-    socket.on('systemMessage', data => {
+    socket.on('roomEvent', data => {
       // 입/퇴장 메시지 표시
       showSystemMessage(data.msg);
     
@@ -282,9 +316,11 @@ export async function renderChatRoom(container, user, roomId) {
         dropdownMenu.className = 'dropdown-menu dropdown-menu-end';
         dropdownMenu.innerHTML = `
           <li><button class="dropdown-item user-info-btn" data-id="${u.id}">사용자 정보</button></li>
-          ${isOwner && room.owner.id!=u.id?
+          ${true ?
           `<li><hr class="dropdown-divider"></li>
-          <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>` : ''}
+          <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><button class="dropdown-item text-danger ban-user-btn" data-id="${u.id}">밴</button></li>` : ''}
         `;
         
         dropdownDiv.appendChild(dropdownBtn);
@@ -298,15 +334,7 @@ export async function renderChatRoom(container, user, roomId) {
       // 접속 인원수 표시
       currentCount.textContent = data.roomUserCount;
 
-      userList.querySelectorAll('.kick-user-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-          const targetId = e.target.dataset.id;
-          if (confirm('정말 이 사용자를 강퇴하시겠습니까?')) {
-            socket.emit('kickUser', { roomId, userId: Number(targetId) });
-          }
-        });
-      });
-
+      // 사용자 정보 버튼
       userList.querySelectorAll('.user-info-btn').forEach(btn => {
         btn.addEventListener('click', async e => {
           const targetId = Number(e.target.dataset.id);
@@ -334,7 +362,30 @@ export async function renderChatRoom(container, user, roomId) {
           }
         });
       });
+
+      // 사용자 강퇴 버튼
+      userList.querySelectorAll('.kick-user-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const targetId = e.target.dataset.id;
+          if (confirm('정말 이 사용자를 강퇴하시겠습니까?')) {
+            socket.emit('kickUser', { roomId, userId: Number(targetId) });
+          }
+        });
+      });
+
+      // 사용자 밴 버튼
+      userList.querySelectorAll('.ban-user-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const targetId = Number(e.target.dataset.id);
       
+          const banReason = prompt('사용자를 밴하시겠습니까?\n밴 사유를 입력하세요:');
+          if (!banReason) return;
+
+          console.log(banReason);
+      
+          socket.emit('banUser', { roomId, userId: targetId, banReason });
+        });
+      });
     });
 
     // 기존 채팅 메시지 조회
@@ -366,7 +417,7 @@ export async function renderChatRoom(container, user, roomId) {
         chatInput.style.overflowY = "hidden";
       }
     }
-    chatInput.addEventListener("input", resizeTextarea);
+    chatInput.addEventListener('input', resizeTextarea);
 
     // 메시지 전송
     chatSubmit.addEventListener('click', sendMessage);
@@ -527,10 +578,7 @@ export function leaveChatRoom() {
   if (socket && currentRoomId) {
     socket.emit('leaveRoom', { roomId: currentRoomId }, (res) => {
       if (res?.success) {
-        console.log('서버 퇴장 완료, 안전하게 연결 종료');
-        socket.off();
-        socket.disconnect();
-        socket = null;
+        closeSocketConnection();
       } else {
         console.error('퇴장 처리 실패:', res?.error);
       }

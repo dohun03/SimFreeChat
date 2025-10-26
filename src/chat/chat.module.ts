@@ -8,15 +8,21 @@ import { ChatEvents } from './chat.events';
 import { MessagesModule } from 'src/messages/messages.module';
 import { RoomsModule } from 'src/rooms/rooms.module';
 import { Room } from 'src/rooms/rooms.entity';
+import { RoomUsersModule } from 'src/room-users/room-users.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Room]),
     RedisGlobalModule,
     MessagesModule,
+    RoomUsersModule,
     forwardRef(() => RoomsModule),
   ],
-  providers: [ChatGateway, ChatEvents, ChatService],
+  providers: [
+    ChatGateway,
+    ChatEvents,
+    ChatService,
+  ],
   exports: [ChatService]
 })
 export class ChatModule {}

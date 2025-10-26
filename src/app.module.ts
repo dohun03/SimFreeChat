@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { RedisGlobalModule } from './redis/redis.module';
 import { ChatModule } from './chat/chat.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { RoomUsersModule } from './room-users/room-users.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     MessagesModule,
     AuthModule,
     RedisGlobalModule,
-    ChatModule
+    ChatModule,
+    RoomUsersModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { RoomUser } from 'src/room-users/room-user.entity';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 
 @Entity()
 export class User {
@@ -25,6 +26,9 @@ export class User {
 
   @Column({ name: 'ip_address', length: 50, nullable: true })
   ipAddress: string;
+
+  @OneToMany(() => RoomUser, (roomUser) => roomUser.user)
+  roomUsers: RoomUser[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
