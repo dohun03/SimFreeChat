@@ -1,10 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
 import { Repository } from 'typeorm';
-import { CreateRoomUserDto } from './dto/create-room-user.dto';
-import { UpdateRoomUserDto } from './dto/update-room-user.dto';
 import { RoomUser } from './room-user.entity';
 
 @Injectable()
@@ -17,7 +15,7 @@ export class RoomUsersService {
     private readonly roomUserRepository: Repository<RoomUser>,
   ) {}
 
-  async banUser(roomId: number, userId: number, owner: any, banReason: string): Promise<void> {
+  async banUserById(roomId: number, userId: number, owner: any, banReason: string): Promise<void> {
     // 유효성 체크
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
@@ -48,6 +46,31 @@ export class RoomUsersService {
       banReason
     });
     await this.roomUserRepository.save(bannedUser);
+  }
+
+  async unBanUserById(roomId: number, userId: number, sessionId: string): Promise<void> {
+    const session = await this.redisService.getSession(sessionId);
+    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
+    const room = await this.roomRepository.findOne({
+      where: {
+        id: roomId,
+        owner: session.userId
+      }
+    });
+    if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
+
+    try {
+      const result = await this.roomUserRepository.delete({
+        room: { id: roomId },
+        user: { id: userId }
+      });
+      
+      if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
+    } catch (err) {
+      console.error('밴 해제 중 DB 삭제 에러:', err);
+      throw new InternalServerErrorException('밴 해제 처리 중 오류가 발생했습니다.');
+    }
   }
 
   getBannedUsersById(roomId: number): Promise<RoomUser[]> {

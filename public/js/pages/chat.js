@@ -78,7 +78,7 @@ export async function renderChatRoom(container, user, roomId) {
           </div>
         </div>
       </div>
-      ${isMine & !msg.isDeleted ? 
+      ${isMine && !msg.isDeleted ? 
         `<button class="btn btn-sm btn-outline-danger delete-btn position-absolute top-0 end-0 mt-1 me-1" style="opacity: 0; transition: opacity 0.2s;">
           <i class="bi bi-trash"></i>
         </button>` : ''
@@ -93,6 +93,8 @@ export async function renderChatRoom(container, user, roomId) {
     // 삭제 버튼 표시
     if (isMine) {
       const deleteBtn = li.querySelector('.delete-btn');
+      if (!deleteBtn) return li;
+
       li.addEventListener('mouseenter', () => (deleteBtn.style.opacity = '1'));
       li.addEventListener('mouseleave', () => (deleteBtn.style.opacity = '0'));
     }
@@ -124,9 +126,11 @@ export async function renderChatRoom(container, user, roomId) {
     }
     const bannedUsers = await bannedUsersRes.json();
     let isBanned = false;
+    let banReason = '';
     bannedUsers.forEach(b => {
       if (b.user.id===user.id) {
         isBanned = true;
+        banReason = b.banReason
       }
     });
 
@@ -135,7 +139,8 @@ export async function renderChatRoom(container, user, roomId) {
         <!-- 왼쪽: 제목 + 수정 버튼 -->
         <div class="d-flex align-items-center gap-2">
           <h3 id="room-name" class="mb-0 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
-          <button type="button" id="chat-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">채팅방 관리</button>
+          <button type="button" id="room-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">채팅방 관리</button>
+          <button type="button" id="room-ban-manager" class="btn btn-sm btn-danger ${isOwner ? '' : 'd-none'}">채팅방 밴 관리</button>
         </div>
 
         <!-- 오른쪽: 검색창 -->
@@ -225,7 +230,8 @@ export async function renderChatRoom(container, user, roomId) {
     const chatSearchSubmit = document.getElementById('chat-search-submit');
     const chatSearchUp = document.getElementById('search-up');
     const chatSearchDown = document.getElementById('search-down');
-    const chatEdit = document.getElementById('chat-edit');
+    const roomEdit = document.getElementById('room-edit');
+    const roomBanManager = document.getElementById('room-ban-manager');
 
     // Socket.io 연결
     socket = io('http://25.9.141.41:4000', {
@@ -236,7 +242,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     if (isBanned) {
-      showErrorMessage('이 방에서 밴 처리된 사용자입니다.');
+      showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banReason}`);
       closeSocketConnection();
       return;
     }
@@ -316,7 +322,7 @@ export async function renderChatRoom(container, user, roomId) {
         dropdownMenu.className = 'dropdown-menu dropdown-menu-end';
         dropdownMenu.innerHTML = `
           <li><button class="dropdown-item user-info-btn" data-id="${u.id}">사용자 정보</button></li>
-          ${true ?
+          ${isOwner && room.owner.id!=u.id ?
           `<li><hr class="dropdown-divider"></li>
           <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>
           <li><hr class="dropdown-divider"></li>
@@ -380,8 +386,6 @@ export async function renderChatRoom(container, user, roomId) {
       
           const banReason = prompt('사용자를 밴하시겠습니까?\n밴 사유를 입력하세요:');
           if (!banReason) return;
-
-          console.log(banReason);
       
           socket.emit('banUser', { roomId, userId: targetId, banReason });
         });
@@ -565,8 +569,13 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // 채팅방 수정 페이지
-    chatEdit.addEventListener('click', () => {
+    roomEdit.addEventListener('click', () => {
       window.open(`/edit-room/${roomId}`, '_blank');
+    });
+
+    // 채팅방 밴 관리 페이지
+    roomBanManager.addEventListener('click', () => {
+      window.open(`/room/${roomId}/ban-manager`, '_blank');
     });
   } catch (err) {
     container.textContent = `서버 에러가 발생했습니다. ${err}`;

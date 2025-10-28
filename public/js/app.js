@@ -8,6 +8,7 @@ import { renderChatRoom, leaveChatRoom } from './pages/chat.js';
 import { renderRoomsList } from './pages/rooms.js';
 import { renderAdmin } from './pages/admin/index.js';
 import { renderEditUser } from './pages/admin/editUser.js';
+import { renderBanManagerByRoom } from './pages/banManagerByRoom.js';
 
 // XSS 방지 함수
 export function escapeHtml(str) {
@@ -66,6 +67,11 @@ export async function router() {
     case path.startsWith('/edit-room/'): {
       const roomId = path.split('/')[2];
       renderEditRoom(app, user, roomId);
+      break;
+    }
+    case path.startsWith('/room/') && path.endsWith('/ban-manager'): {
+      const roomId = path.split('/')[2];
+      renderBanManagerByRoom(app, user, roomId);
       break;
     }
     case path.startsWith('/room/'): {

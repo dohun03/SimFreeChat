@@ -256,7 +256,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const owner = await this.getUserFromSession(client);
       const { roomId, userId, banReason } = payload;
-      await this.roomUsersService.banUser(roomId, userId, owner, banReason);
+      await this.roomUsersService.banUserById(roomId, userId, owner, banReason);
       const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
       this.removeUserSocket(roomId, userId);
 

@@ -21,7 +21,7 @@ export async function renderEditRoom(container, user, roomId) {
 
     container.innerHTML = `
       <div class="container mt-4" style="max-width: 450px;">
-        <h2 class="mb-4 text-center">채팅방 생성</h2>
+        <h2 class="mb-4 text-center">채팅방 정보 수정</h2>
         <form id="edit-room-form">
           <!-- 방 이름 -->
           <div class="mb-3">
