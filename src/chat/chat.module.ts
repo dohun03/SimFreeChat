@@ -9,10 +9,11 @@ import { MessagesModule } from 'src/messages/messages.module';
 import { RoomsModule } from 'src/rooms/rooms.module';
 import { Room } from 'src/rooms/rooms.entity';
 import { RoomUsersModule } from 'src/room-users/room-users.module';
+import { RoomUser } from 'src/room-users/room-user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Room]),
+    TypeOrmModule.forFeature([User, Room, RoomUser]),
     RedisGlobalModule,
     MessagesModule,
     RoomUsersModule,

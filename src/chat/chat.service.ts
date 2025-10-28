@@ -6,6 +6,7 @@ import { In, Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { ChatEvents } from './chat.events';
 import * as bcrypt from 'bcrypt';
+import { RoomUser } from 'src/room-users/room-user.entity';
 
 @Injectable()
 export class ChatService {
@@ -15,6 +16,8 @@ export class ChatService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
+    @InjectRepository(RoomUser)
+    private readonly roomUserRepository: Repository<RoomUser>,
     private readonly chatEvents: ChatEvents,
   ) {}
 
@@ -34,6 +37,14 @@ export class ChatService {
       where: { id: userId }
     });
     if (!joinUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
+
+    const roomUser = await this.roomUserRepository.findOne({
+      where: {
+        room: { id: roomId },
+        user: { id: userId },
+      },
+    });
+    if (roomUser?.isBanned) throw new BadRequestException(`이 방에서 밴 처리된 사용자입니다: ${roomUser.banReason}`);
     
     await this.redisService.addUserToRoom(roomId, userId);
 

@@ -267,14 +267,14 @@ export async function renderChatRoom(container, user, roomId) {
 
     // [서버와 연결 끊김 Event]
     socket.on('disconnect', (reason) => {
-      showErrorMessage(`서버와 연결 끊김:, ${reason}`);
+      showErrorMessage(`SERVER: ${reason}`);
       socket.off();
       socket = null;
     });
     
     // [수동으로 서버와 연결 끊김 Event]
     socket.on('forcedDisconnect', (data) => {
-      showErrorMessage(`서버와 연결 끊김:, ${data.msg}`);
+      showErrorMessage(`SERVER: ${data.msg}`);
       socket.off();
       socket = null;
     });
