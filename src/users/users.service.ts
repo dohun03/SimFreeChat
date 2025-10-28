@@ -83,11 +83,14 @@ export class UsersService {
     const where: any = new Object();
 
     if (search) {
-      where.name = Like(`%${search}%`);
+      where.OR = [
+        { name: Like(`%${search}%`) },
+        { email: Like(`%${search}%`)}
+      ]
     }
 
     const users = await this.userRepository.find({
-      where,
+      where: where.OR,
       select: ['id', 'name', 'email', 'isAdmin', 'createdAt', 'updatedAt']
     });
     if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');

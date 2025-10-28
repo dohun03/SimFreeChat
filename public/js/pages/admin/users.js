@@ -14,7 +14,7 @@ export async function renderAdminUsers(container, user) {
       <div class="row mb-3">
         <div class="col-md-6">
           <div class="input-group">
-            <input type="text" id="user-search" class="form-control" placeholder="유저 검색 (ID, 이름, 이메일)">
+            <input type="text" id="user-search" class="form-control" placeholder="유저 검색 (이름, 이메일)">
             <button class="btn btn-primary" id="search-btn">검색</button>
           </div>
         </div>
