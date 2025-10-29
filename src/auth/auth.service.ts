@@ -16,7 +16,7 @@ export class AuthService {
   ) {}
 
   // 로그인 로직
-  async logIn(loginUserDto: LoginUserDto) {
+  async logIn(loginUserDto: LoginUserDto): Promise<{ sessionId: string, safeUser: any }> {
     const { name, password } = loginUserDto;
 
     const user = await this.userRepository.findOne({ where: { name: name }});
@@ -39,7 +39,7 @@ export class AuthService {
   }
 
   // 로그아웃 로직
-  async logOut(sessionId: string) {
+  async logOut(sessionId: string): Promise<void> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new BadRequestException('로그인 되어있지 않은 사용자입니다.');
 

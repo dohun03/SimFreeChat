@@ -4,7 +4,6 @@ import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
 import { ILike, Repository } from 'typeorm';
-import { CreateMessageDto } from './dto/create-message.dto';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message } from './messages.entity';
@@ -23,9 +22,7 @@ export class MessagesService {
     private readonly redisService: RedisService,
   ) {}
 
-  async createMessage(createMessageDto: CreateMessageDto): Promise<ResponseMessageDto> {
-    const { roomId, userId, content } = createMessageDto;
-
+  async createMessage(roomId: number, userId: number, content: string): Promise<ResponseMessageDto> {
     try {
       const [room, user] = await Promise.all([
         this.roomRepository.findOne({ where: { id: roomId } }),
@@ -63,7 +60,7 @@ export class MessagesService {
     }
   }
 
-  async deleteMessage(roomId: number, userId: number, messageId: number) {
+  async deleteMessage(roomId: number, userId: number, messageId: number): Promise<number> {
     try {
       const message = await this.messageRepository.findOne({
         where: {
@@ -119,7 +116,7 @@ export class MessagesService {
     });
   }
 
-  async getAllMessageLogs(sessionId: string, query: any) {
+  async getAllMessageLogs(sessionId: string, query: any): Promise<{ messageLogs: MessageLog[], totalCount: number }> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
   

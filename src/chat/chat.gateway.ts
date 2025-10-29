@@ -4,6 +4,8 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  ConnectedSocket,
+  MessageBody
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RedisService } from 'src/redis/redis.service';
@@ -11,8 +13,15 @@ import { ChatService } from './chat.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MessagesService } from 'src/messages/messages.service';
 import { map } from 'rxjs';
-import { UnauthorizedException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate, ValidationError } from 'class-validator';
 import { RoomUsersService } from 'src/room-users/room-users.service';
+import { SendMessageDto } from './dto/send-message.dto';
+import { JoinRoomDto } from './dto/join-room.dto';
+import { LeaveRoomDto } from './dto/leave-room.dto';
+import { DeleteMessageDto } from './dto/delete-message.dto';
+import { KickUserDto } from './dto/kick-user.dto';
+import { BanUserDto } from './dto/ban-user.dto';
 
 @WebSocketGateway({
   cors: {
@@ -98,21 +107,43 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       .find(c => c.startsWith('SESSIONID='))
       ?.split('=')[1];
   
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+    if (!sessionId) throw new Error('세션이 존재하지 않습니다.');
   
     const user = await this.redisService.getSession(sessionId);
-    if (!user) throw new UnauthorizedException('세션 정보가 없습니다.');
+    if (!user) throw new Error('세션 정보가 없습니다.');
   
     return user;
   }
 
+  // DTO 수동 유효성 검사 메서드
+  private async validateDto<T extends object>(dtoClass: new () => T, payload: any): Promise<T> {
+    const dto = plainToInstance(dtoClass, payload);
+    const errors: ValidationError[] = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+  
+    if (errors.length > 0) {
+      const messages = errors
+        .map(err => Object.values(err.constraints || {}))
+        .flat()
+        .join(', ');
+      throw new Error(messages);
+    }
+  
+    return dto;
+  }
   
   // WebSocket 이벤트(@SubscribeMessage) 방식
   @SubscribeMessage('joinRoom')
-  async handleJoinRoom(client: Socket, payload: { roomId: number, password: string }) {
+  async handleJoinRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(JoinRoomDto, payload);
       const user = await this.getUserFromSession(client);
-      const { roomId, password } = payload;
+      const { roomId, password } = dto;
       const { roomUsers, afterCount, joinUser } = await this.chatService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
@@ -127,21 +158,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUserCount: afterCount,
       });
     } catch (err) {
+      console.error(err.message);
       client.emit('forcedDisconnect', { msg: err.message });
       client.disconnect();
     }
   }
 
   @SubscribeMessage('leaveRoom')
-  async handleLeaveRoom(client: Socket, payload: { roomId: number }) {
+  async handleLeaveRoom(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(LeaveRoomDto, payload);
       const user = await this.getUserFromSession(client);
-      const { roomUsers, roomUserCount, leaveUser } = await this.chatService.leaveRoom(payload.roomId, user.userId);
+      const { roomUsers, roomUserCount, leaveUser } = await this.chatService.leaveRoom(dto.roomId, user.userId);
 
-      client.leave(payload.roomId.toString());
+      client.leave(dto.roomId.toString());
   
       // 방 전체에 퇴장 메시지 전송
-      this.server.to(payload.roomId.toString()).emit('roomEvent', {
+      this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${leaveUser.name} 님이 퇴장했습니다.`,
         roomUsers,
         roomUserCount,
@@ -202,46 +238,54 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('sendMessage')
-  async handleSendMessage(client: Socket, payload: { roomId: number, content: string }) {
+  async handleSendMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(SendMessageDto, payload);
       const user = await this.getUserFromSession(client);
-      const message = await this.messagesService.createMessage({
-        roomId: payload.roomId,
-        userId: user.userId,
-        content: payload.content
-      });
+      const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content);
   
-      this.server.to(payload.roomId.toString()).emit('messageCreated', message);
+      this.server.to(dto.roomId.toString()).emit('messageCreated', message);
     } catch (err) {
       console.error(err.message);
     }
   }
 
   @SubscribeMessage('deleteMessage')
-  async handleDeleteMessage(client: Socket, payload: { roomId: number, messageId: number }) {
+  async handleDeleteMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(DeleteMessageDto, payload);
       const user = await this.getUserFromSession(client);
-      const messageId = await this.messagesService.deleteMessage(
-        payload.roomId,
-        user.userId,
-        payload.messageId
-      );
+      const messageId = await this.messagesService.deleteMessage(dto.roomId, user.userId, dto.messageId);
   
-      this.server.to(payload.roomId.toString()).emit('messageDeleted', messageId);
+      this.server.to(dto.roomId.toString()).emit('messageDeleted', messageId);
+
+      return { success: true };
     } catch (err) {
       console.error(err.message);
+      return { success: false };
     }
   }
 
   @SubscribeMessage('kickUser')
-  async handleKickUser(client: Socket, payload: { roomId: number, userId: number }) {
+  async handleKickUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(KickUserDto, payload);
       const owner = await this.getUserFromSession(client);
-      const { roomId, userId } = payload;
-      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
-      this.removeUserSocket(roomId, userId);
 
-      this.server.to(roomId.toString()).emit('roomEvent', {
+      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
+
+      this.removeUserSocket(dto.roomId, dto.userId);
+
+      this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${kickedUser.name} 님을 퇴장시켰습니다.`,
         roomUsers,
         roomUserCount,
@@ -252,15 +296,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('banUser')
-  async handleBanUser(client: Socket, payload: { roomId: number, userId: number, banReason: string }) {
+  async handleBanUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: any,
+  ) {
     try {
+      const dto = await this.validateDto(BanUserDto, payload);
       const owner = await this.getUserFromSession(client);
-      const { roomId, userId, banReason } = payload;
-      await this.roomUsersService.banUserById(roomId, userId, owner, banReason);
-      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(roomId, userId, owner);
-      this.removeUserSocket(roomId, userId);
 
-      this.server.to(roomId.toString()).emit('roomEvent', {
+      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner, dto.banReason);
+
+      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
+
+      this.removeUserSocket(dto.roomId, dto.userId);
+
+      this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${kickedUser.name} 님을 밴했습니다.`,
         roomUsers,
         roomUserCount,

@@ -46,7 +46,7 @@ export class UsersController {
   }
 
   @Patch('me')
-  updateMe(
+  async updateMe(
     @Body() updateUserDto: UpdateUserDto, 
     @Req() req: any
   ) {
@@ -57,7 +57,7 @@ export class UsersController {
   }
 
   @Patch('/:userId')
-  updateById(
+  async updateById(
     @Body() updateUserDto: UpdateUserDto,
     @Param('userId', ParseIntPipe) userId: number,
     @Req() req: any

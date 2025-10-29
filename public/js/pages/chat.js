@@ -19,6 +19,7 @@ export async function renderChatRoom(container, user, roomId) {
     return;
   }
 
+  roomId = Number(roomId);
   currentRoomId = roomId;
 
   // 시스템 알림 함수
@@ -267,14 +268,14 @@ export async function renderChatRoom(container, user, roomId) {
 
     // [서버와 연결 끊김 Event]
     socket.on('disconnect', (reason) => {
-      showErrorMessage(`SERVER: ${reason}`);
+      showErrorMessage(`연결 끊김: ${reason}`);
       socket.off();
       socket = null;
     });
     
     // [수동으로 서버와 연결 끊김 Event]
     socket.on('forcedDisconnect', (data) => {
-      showErrorMessage(`SERVER: ${data.msg}`);
+      showErrorMessage(`연결 끊김: ${data.msg}`);
       socket.off();
       socket = null;
     });
@@ -288,6 +289,7 @@ export async function renderChatRoom(container, user, roomId) {
 
     // [공용 UI 소켓 Event]
     socket.on('roomEvent', data => {
+      console.log(data);
       // 입/퇴장 메시지 표시
       showSystemMessage(data.msg);
     
@@ -385,7 +387,7 @@ export async function renderChatRoom(container, user, roomId) {
           const targetId = Number(e.target.dataset.id);
       
           const banReason = prompt('사용자를 밴하시겠습니까?\n밴 사유를 입력하세요:');
-          if (!banReason) return;
+          // if (!banReason) return;
       
           socket.emit('banUser', { roomId, userId: targetId, banReason });
         });
@@ -460,16 +462,21 @@ export async function renderChatRoom(container, user, roomId) {
       if (!deleteBtn) return;
     
       const messageItem = deleteBtn.closest('.chat-message');
-      const messageId = messageItem.dataset.id;
+      const messageId = Number(messageItem.dataset.id);
     
       if (confirm('이 메시지를 삭제하시겠습니까?')) {
-        socket.emit('deleteMessage', { roomId, messageId });
+        socket.emit('deleteMessage', { roomId, messageId }, (res) => {
+          if (res.success) {
+            deleteBtn.remove();
+          } else {
+            alert('삭제에 실패했습니다.');
+          }
+        });
       }
     });
 
     // [메시지 삭제 Event]
     socket.on('messageDeleted', messageId => {
-      showSystemMessage(`${messageId}번 메시지가 삭제되었습니다.`);
       const content = document.querySelector(`li[data-id="${messageId}"] .chat-content`);
       content.innerHTML = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
     });

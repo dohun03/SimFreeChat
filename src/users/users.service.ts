@@ -57,7 +57,7 @@ export class UsersService {
   }
 
   // 특정 사용자 조회
-  async getUserById(userId: number) {
+  async getUserById(userId: number): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({
       where: {
         id: userId
@@ -71,7 +71,7 @@ export class UsersService {
   }
 
   // 모든 사용자 조회 (관리자)
-  async getAll(sessionId: string, search?: string) {
+  async getAll(sessionId: string, search?: string): Promise<User[]> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
@@ -99,7 +99,7 @@ export class UsersService {
   }
 
   // 본인 프로필 수정하기
-  async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto) {
+  async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
@@ -147,7 +147,7 @@ export class UsersService {
   }
 
   // 특정 사용자 프로필 수정하기 (관리자)
-  async updateUserById(sessionId: string, userId: number, updateUserDto: UpdateUserDto) {
+  async updateUserById(sessionId: string, userId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
@@ -180,7 +180,7 @@ export class UsersService {
   }
 
   // 특정 사용자 삭제하기 (관리자)
-  async deleteUserById(sessionId: string, userId: number) {
+  async deleteUserById(sessionId: string, userId: number): Promise<void> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 

@@ -6,6 +6,7 @@ import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room } from './rooms.entity';
 import * as bcrypt from 'bcrypt';
+import { RoomResponseDto } from './dto/response-room.dto';
 
 @Injectable()
 export class RoomsService {
@@ -92,7 +93,7 @@ export class RoomsService {
   }
 
   // 방 전체 조회
-  async getAllRooms(search?: string) {
+  async getAllRooms(search?: string): Promise<RoomResponseDto[]> {
     try {
       const where: any = new Object();
 
@@ -130,7 +131,7 @@ export class RoomsService {
   }
 
   // 방 하나 조회
-  async getRoomById(sessionId: string, roomId: number) {
+  async getRoomById(sessionId: string, roomId: number): Promise<RoomResponseDto> {
     const session = await this.redisService.getSession(sessionId);
     if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
