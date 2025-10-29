@@ -99,6 +99,7 @@ export class MessagesService {
 
     if (search) {
       where.content = ILike(`%${search}%`);
+      where.isDeleted = false;
       order.id = 'DESC'; // 검색 시 내림차순으로 반환.
     }
 
