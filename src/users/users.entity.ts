@@ -24,9 +24,6 @@ export class User {
   @Column({ name: 'ban_reason', length: 50, nullable: true })
   banReason: string;
 
-  @Column({ name: 'ip_address', length: 50, nullable: true })
-  ipAddress: string;
-
   @OneToMany(() => RoomUser, (roomUser) => roomUser.user)
   roomUsers: RoomUser[];
 

@@ -49,7 +49,7 @@ export class MessagesService {
       });
       await this.messageLogRepository.save(newMessageLog);
       
-      const { password, ipAddress: ip_address, ...safeUser } = user;
+      const { password, ...safeUser } = user;
       return {
         ...message,
         user: safeUser,
@@ -109,7 +109,7 @@ export class MessagesService {
     });
 
     return messages.map((msg) => {
-      const { password, ipAddress: ip_address, ...safeUser } = msg.user;
+      const { password, ...safeUser } = msg.user;
       return {
         ...msg,
         user: safeUser
