@@ -8,8 +8,12 @@ export class RoomUsersController {
   constructor(private readonly roomUsersService: RoomUsersService) {}
   @Get('/:roomId')
   getById(
-    @Param('roomId', ParseIntPipe) roomId: number
+    @Param('roomId', ParseIntPipe) roomId: number,
+    @Req() req: any
   ) {
+    const sessionId = req.cookies['SESSIONID'];
+    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
+
     return this.roomUsersService.getBannedUsersById(roomId);
   }
   
