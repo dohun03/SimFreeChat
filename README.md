@@ -139,8 +139,8 @@
 | GET | `/users/:userId` | 특정 사용자 조회 |
 | GET | `/users` | 전체 사용자 조회 (검색 지원) |
 | PATCH | `/users/me` | 내 프로필 수정 |
-| PATCH | `/users/:userId` | 특정 사용자 정보 수정 (관리자 또는 본인) |
-| DELETE | `/users/:userId` | 사용자 삭제 (관리자 또는 본인) |
+| PATCH | `/users/:userId` | 특정 사용자 정보 수정 (관리자) |
+| DELETE | `/users/:userId` | 사용자 삭제 (관리자) |
 
 ---
 
@@ -149,8 +149,8 @@
 | 메서드 | URL | 설명 |
 |--------|------|------|
 | POST | `/rooms` | 채팅방 생성 |
-| PATCH | `/rooms/:roomId` | 채팅방 수정 (방장만 가능) |
-| DELETE | `/rooms/:roomId` | 채팅방 삭제 (방장만 가능) |
+| PATCH | `/rooms/:roomId` | 채팅방 수정 (방장) |
+| DELETE | `/rooms/:roomId` | 채팅방 삭제 (방장) |
 | GET | `/rooms` | 전체 채팅방 조회 (검색 지원) |
 | GET | `/rooms/:roomId` | 특정 채팅방 상세 조회 |
 
@@ -161,7 +161,7 @@
 | 메서드 | URL | 설명 |
 |--------|------|------|
 | GET | `/room-users/:roomId` | 특정 방의 밴된 사용자 목록 조회 |
-| DELETE | `/room-users/:roomId/:userId` | 밴 해제 (방장만 가능) |
+| DELETE | `/room-users/:roomId/:userId` | 밴 해제 (방장) |
 
 ---
 
@@ -169,7 +169,7 @@
 
 | 메서드 | URL | 설명 |
 |--------|------|------|
-| GET | `/messages/logs` | 전체 메시지 로그 조회 (관리자용) |
+| GET | `/messages/logs` | 전체 메시지 로그 조회 (관리자) |
 | GET | `/messages/:roomId` | 특정 채팅방 내 메시지 조회 |
 
 ---
