@@ -16,14 +16,15 @@
    - [3. 채팅방](#3-채팅방)
    - [4. 채팅방 권한](#4-채팅방-권한)
    - [5. 메시지](#5-메시지)
-2. [사용한 기술 스택](#사용한-기술-스택)
-3. [아키텍처](#아키텍처)
-4. [ERD 데이터 모델링](#erd-데이터-모델링)
-5. [API 명세서](#api-명세서)
-6. [폴더 구조](#폴더-구조)
-7. [설치 및 실행 방법](#설치-및-실행-방법)
-8. [문제 해결](#문제-해결)
-9. [추가 구현하고 싶은 기능들](#추가-구현하고-싶은-기능들)
+2. [시연 영상](#시연-영상)
+3. [사용한 기술 스택](#사용한-기술-스택)
+4. [아키텍처](#아키텍처)
+5. [ERD 데이터 모델링](#erd-데이터-모델링)
+6. [API 명세서](#api-명세서)
+7. [폴더 구조](#폴더-구조)
+8. [설치 및 실행 방법](#설치-및-실행-방법)
+9. [문제 해결](#문제-해결)
+10. [추가 구현하고 싶은 기능들](#추가-구현하고-싶은-기능들)
 
 ---
 
@@ -70,6 +71,14 @@
 
 - 실시간 메시지 생성 / 조회 / 삭제 기능  
 - 메시지 생성 및 삭제 시, 해당 로그를 자동 기록
+ 
+---
+
+## 시연 영상
+
+음성이 없는 짧은 데모입니다
+
+<video src="https://github.com/user-attachments/assets/270d5cf5-b276-4943-9eb7-010d9bc3b07d" controls width="800"></video>
 
 ---
 
@@ -98,7 +107,7 @@
 
 ## 아키텍처
 
-<img width="960" height="942" alt="Image" src="https://github.com/user-attachments/assets/b4d4118c-809d-452b-906e-bb8f65f1f91f" />
+<img width="100%" height="942" alt="Image" src="https://github.com/user-attachments/assets/b4d4118c-809d-452b-906e-bb8f65f1f91f" />
 
 ---
 
@@ -108,9 +117,9 @@
 - **room**: 채팅방 정보  
 - **room_users**: 채팅방 참여자 및 밴 정보 관리  
 - **message**: 실시간 메시지 저장  
-- **message_log**: 메시지 전송 및 삭제 기록 저장
+- **message_log**: 메시지 생성 및 삭제 이력 저장
 
-<img width="1381" height="1052" alt="Image" src="https://github.com/user-attachments/assets/1570a903-0a64-413e-8af3-5e9516a60433" />
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/1570a903-0a64-413e-8af3-5e9516a60433" />
 
 ---
 
@@ -220,14 +229,13 @@ CHAT/
 
 ## 설치 및 실행 방법
 
-실행 환경
+### 실행 환경
 - Node.js 20.18.3
 - MySQL 8.0.36
 - Redis 5.0.7
 
-프로젝트 설치 및 실행
+### 프로젝트 설치 및 실행
 ``` bash
-
 git clone https://github.com/dohun03/SimFreeChat.git
 
 cd your-project # 프로그램이 실행될 디렉토리로 이동
@@ -237,7 +245,7 @@ npm run start # 실행용
 npm run start:dev # 개발용
 ```
 
-.env 파일 작성 예시
+### .env 파일 작성 예시
 ```
 # 서버 포트
 PORT=4000
@@ -285,7 +293,7 @@ SOCKET_ORIGIN=http://localhost:4000
 
 ---
 
-## [추가 구현하고 싶은 기능들]
+## 추가 구현하고 싶은 기능들
 
 > 추후 여유가 된다면 구현해보고 싶은 기능입니다.
 
