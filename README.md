@@ -32,7 +32,7 @@
 
 음성이 없는 짧은 데모입니다
 
-[시연 영상 보기](https://github.com/dohun03/SimFreeChat/blob/main/assets/demo.mp4?raw=true)
+<video controls width="600" src="https://dohun03.github.io/SimFreeChat/assets/demo.mp4"></video>
 
 ---
 
@@ -84,7 +84,7 @@
 
 ## 사용한 기술 스택
 
-- **Node.js / NestJS**: REST API 및 WebSocket 서버 구축  
+- **Node.js / NestJS / TypeScript**: REST API 및 WebSocket 서버 구축  
 - **Socket.io**: 실시간 양방향 통신  
 - **MySQL**: 관계형 데이터 모델링 및 영구 데이터 저장  
 - **Redis**: 세션 캐싱 및 실시간 방 인원 저장  
@@ -93,6 +93,7 @@
 <div align="center"> 
 <img height="30" src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
 <img height="30" src="https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white" />
+<img height="30" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
 <img height="30" src="https://img.shields.io/badge/Socket.io-010101?style=flat-square&logo=socketdotio&logoColor=white" />
 <img height="30" src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
 <img height="30" src="https://img.shields.io/badge/Bootstrap-7952B3?style=flat-square&logo=bootstrap&logoColor=white" />
