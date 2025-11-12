@@ -32,7 +32,7 @@
 
 음성이 없는 짧은 데모입니다
 
-<video controls width="600" src="https://dohun03.github.io/SimFreeChat/assets/demo.mp4"></video>
+[데모 영상 (GitHub Pages)](https://dohun03.github.io/SimFreeChat/assets/demo.mp4)
 
 ---
 
