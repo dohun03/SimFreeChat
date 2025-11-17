@@ -6,7 +6,7 @@ import { User } from 'src/users/users.entity';
 import { ILike, Repository } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
-import { Message } from './messages.entity';
+import { Message, MessageType } from './messages.entity';
 
 @Injectable()
 export class MessagesService {
@@ -22,7 +22,7 @@ export class MessagesService {
     private readonly redisService: RedisService,
   ) {}
 
-  async createMessage(roomId: number, userId: number, content: string): Promise<ResponseMessageDto> {
+  async createMessage(roomId: number, userId: number, content: string, type: string): Promise<ResponseMessageDto> {
     try {
       const [room, user] = await Promise.all([
         this.roomRepository.findOne({ where: { id: roomId } }),
@@ -31,10 +31,13 @@ export class MessagesService {
     
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
   
+      const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
+
       const newMessage = this.messageRepository.create({
         room,
         user,
-        content
+        content,
+        type: messageType
       });
       const message = await this.messageRepository.save(newMessage);
   
@@ -45,7 +48,8 @@ export class MessagesService {
         userName: user.name,
         messageId: message.id,
         messageContent: message.content,
-        action: 'SEND'
+        action: 'SEND',
+        type: messageType
       });
       await this.messageLogRepository.save(newMessageLog);
       
@@ -100,6 +104,7 @@ export class MessagesService {
     if (search) {
       where.content = ILike(`%${search}%`);
       where.isDeleted = false;
+      where.type = 'text';
       order.id = 'DESC'; // 검색 시 내림차순으로 반환.
     }
 

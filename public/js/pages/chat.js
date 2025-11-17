@@ -68,15 +68,31 @@ export async function renderChatRoom(container, user, roomId) {
   
     if (isMine) li.classList.add('bg-light', 'mine');
   
+    let contentHtml = '';
+  
+    if (msg.isDeleted) {
+      contentHtml = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
+    } else {
+      switch (msg.type) {
+        case 'text':
+          contentHtml = escapeHtml(msg.content);
+          break;
+        case 'image':
+          const url = `/uploads/images/${msg.content}`;
+          contentHtml = `<img src="${url}" alt="image" style="max-height:200px; max-width: 100%; object-fit: contain; border-radius:5px;">`;
+          break;
+        default:
+          console.error('알 수 없는 메시지 타입:', msg.type);
+          contentHtml = '<span class="chat-content text-danger fst-italic small">알 수 없는 메시지 형식입니다.</span>';
+      }
+    }
+  
     li.innerHTML = `
       <div class="d-flex justify-content-between align-items-start">
         <div class="flex-grow-1 me-4">
           <small class="text-muted d-block mb-1">${createdAt}</small>
           <strong class="text-${isMine ? 'primary' : 'dark'} d-block">${escapeHtml(msg.user.name)}</strong>
-          <div class="chat-content">${msg.isDeleted ? 
-            '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>' : escapeHtml(msg.content)
-          }
-          </div>
+          <div class="chat-content">${contentHtml}</div>
         </div>
       </div>
       ${isMine && !msg.isDeleted ? 
@@ -94,14 +110,15 @@ export async function renderChatRoom(container, user, roomId) {
     // 삭제 버튼 표시
     if (isMine) {
       const deleteBtn = li.querySelector('.delete-btn');
-      if (!deleteBtn) return li;
-
-      li.addEventListener('mouseenter', () => (deleteBtn.style.opacity = '1'));
-      li.addEventListener('mouseleave', () => (deleteBtn.style.opacity = '0'));
+      if (deleteBtn) {
+        li.addEventListener('mouseenter', () => (deleteBtn.style.opacity = '1'));
+        li.addEventListener('mouseleave', () => (deleteBtn.style.opacity = '0'));
+      }
     }
   
     return li;
   }
+  
 
   try {
     // 방 정보 조회
@@ -187,12 +204,22 @@ export async function renderChatRoom(container, user, roomId) {
       </div>
 
       <div class="mt-3 hstack gap-3">
+        <!-- 사진 업로드 버튼 -->
+        <button type="button" id="chat-upload-btn" class="btn btn-outline-success align-self-start" title="사진 업로드">
+          <i class="bi bi-card-image"></i>
+        </button>
+      
+        <!-- 숨겨진 파일 input -->
+        <input type="file" id="chat-upload-input" accept="image/*" style="display:none">
+
+        <!-- 메시지 입력 칸 -->
         <textarea id="chat-input"
         class="form-control me-auto"
         placeholder="메시지를 입력하세요"
         aria-label="메시지를 입력하세요"
         rows="1"
         style="max-height: 7.5em; resize: none; overflow-y: auto;"></textarea>
+        
         <button type="button" id="chat-submit" class="btn btn-outline-primary align-self-start">Submit</button>
         <button type="button" id="chat-reset" class="btn btn-outline-danger align-self-start">Reset</button>
       </div>
@@ -402,12 +429,42 @@ export async function renderChatRoom(container, user, roomId) {
     
     const messages = await res.json();
 
+    function scrollToBottom() {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
     messages.forEach(msg => {
       const li = createMessageElement(msg, user.id);
       messagesList.appendChild(li);
     });
 
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+    // 이미지 모두 로딩 후 스크롤
+    function scrollWhenReady() {
+      const images = messagesList.querySelectorAll('img');
+      let loadedCount = 0;
+  
+      if (images.length === 0) {
+        scrollToBottom();
+      } else {
+        images.forEach(img => {
+          img.addEventListener('load', () => {
+            loadedCount++;
+            if (loadedCount === images.length) {
+              scrollToBottom();
+            }
+          });
+  
+          // 이미 캐시된 이미지 처리
+          if (img.complete) {
+            loadedCount++;
+            if (loadedCount === images.length) {
+              scrollToBottom();
+            }
+          }
+        });
+      }
+    }
+    scrollWhenReady();
 
     // 입력 칸 높이 조절 함수
     function resizeTextarea() {
@@ -438,7 +495,7 @@ export async function renderChatRoom(container, user, roomId) {
       const content = chatInput.value;
       if (!content) return;
 
-      socket.emit('sendMessage', { roomId, content });
+      socket.emit('sendMessage', { roomId: currentRoomId, content, type: 'text' });
       chatInput.value = '';
       resizeTextarea();
     }
@@ -447,7 +504,7 @@ export async function renderChatRoom(container, user, roomId) {
     socket.on('messageCreated', data => {
       const li = createMessageElement(data, user.id);
       messagesList.appendChild(li);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+      scrollWhenReady();
     });
     
     // 메시지 리셋
@@ -583,6 +640,45 @@ export async function renderChatRoom(container, user, roomId) {
     // 채팅방 밴 관리 페이지
     roomBanManager.addEventListener('click', () => {
       window.open(`/room/${roomId}/ban-manager`, '_blank');
+    });
+    
+    // 사진 업로드
+    const chatUploadBtn = document.getElementById('chat-upload-btn');
+    const chatUploadInput = document.getElementById('chat-upload-input');
+
+    chatUploadBtn.addEventListener('click', () => {
+      chatUploadInput.click(); // 숨겨진 input 클릭 트리거
+    });
+
+    chatUploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // FormData에 담아서 POST
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/uploads', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+      
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || '업로드 실패');
+        }
+      
+        const data = await res.json();
+        console.log(data);
+      
+        socket.emit('sendMessage', { roomId: currentRoomId, content: data.filename, type: 'image' });
+      
+        chatUploadInput.value = '';
+      } catch (err) {
+        alert(`사진 업로드 실패: ${err.message}`);
+      }
     });
   } catch (err) {
     container.textContent = `서버 에러가 발생했습니다. ${err}`;

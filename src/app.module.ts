@@ -11,6 +11,7 @@ import { RedisGlobalModule } from './redis/redis.module';
 import { ChatModule } from './chat/chat.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RoomUsersModule } from './room-users/room-users.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { RoomUsersModule } from './room-users/room-users.module';
     AuthModule,
     RedisGlobalModule,
     ChatModule,
-    RoomUsersModule
+    RoomUsersModule,
+    UploadsModule
   ],
   controllers: [AppController],
   providers: [AppService],

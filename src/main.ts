@@ -40,7 +40,11 @@ async function bootstrap() {
 
   const server = app.getHttpAdapter().getInstance();
   const publicPath = join(__dirname, '..', 'public');
-  
+  const uploadPath = join(__dirname, '..', 'uploads');
+
+  // /uploads 경로는 서버 uploads 폴더와 매핑
+  server.use('/uploads', express.static(uploadPath));
+
   // /api 경로 요청은 서버로, 나머지는 프론트에 index.html 제공
   server.use(express.static(publicPath));
   server.get(/^(?!\/api).*$/, (req, res) => {

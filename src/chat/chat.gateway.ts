@@ -245,7 +245,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const dto = await this.validateDto(SendMessageDto, payload);
       const user = await this.getUserFromSession(client);
-      const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content);
+      const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content, dto.type);
   
       this.server.to(dto.roomId.toString()).emit('messageCreated', message);
     } catch (err) {

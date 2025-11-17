@@ -2,6 +2,11 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateCol
 import { Room } from '../rooms/rooms.entity';
 import { User } from '../users/users.entity';
 
+export enum MessageType {
+  TEXT = 'text',
+  IMAGE = 'image',
+}
+
 @Entity()
 export class Message {
   @PrimaryGeneratedColumn()
@@ -18,6 +23,13 @@ export class Message {
 
   @Column('text')
   content: string;
+
+  @Column({
+    type: 'enum',
+    enum: MessageType,
+    default: MessageType.TEXT,
+  })
+  type: MessageType;
 
   @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;

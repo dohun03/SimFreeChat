@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { MessageType } from '../messages/messages.entity';
 
 @Entity('message_log')
 export class MessageLog {
@@ -22,6 +23,13 @@ export class MessageLog {
 
   @Column({ name: 'message_content', type: 'text', nullable: true })
   messageContent: string;
+
+  @Column({
+    type: 'enum',
+    enum: MessageType,
+    default: MessageType.TEXT,
+  })
+  type: MessageType;
 
   @Column({ name: 'action', length: 10 })
   action: 'SEND' | 'EDIT' | 'DELETE';
