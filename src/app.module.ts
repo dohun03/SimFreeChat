@@ -12,6 +12,7 @@ import { ChatModule } from './chat/chat.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RoomUsersModule } from './room-users/room-users.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { Logger, QueryRunner } from 'typeorm';
 
 @Module({
   imports: [
@@ -29,6 +30,27 @@ import { UploadsModule } from './uploads/uploads.module';
         database: config.get<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
+        logging: true,
+        maxQueryExecutionTime: 1,
+        logger: new class implements Logger {
+          logQuery() {}
+          logQueryError() {}
+          
+          logQuerySlow(time: number, query: string) {
+            const tableMatch =
+              query.match(/from\s+`?(\w+)`?/i) ||
+              query.match(/into\s+`?(\w+)`?/i) ||
+              query.match(/update\s+`?(\w+)`?/i);
+        
+            const tableName = tableMatch ? tableMatch[1] : 'unknown';
+        
+            console.log(`[QUERY] ${tableName} (${time} ms)`);
+          }
+        
+          logSchemaBuild() {}
+          logMigration() {}
+          log() {}
+        }
       }),
       inject: [ConfigService],
     }),

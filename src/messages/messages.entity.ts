@@ -8,13 +8,14 @@ export enum MessageType {
 }
 
 @Entity()
+@Index('idx_room_id_id', ['room', 'id'])
+@Index('idx_message_content_fulltext', ['content'], { fulltext: true })
 export class Message {
   @PrimaryGeneratedColumn()
   id: number;
 
   @ManyToOne(() => Room, { onDelete: 'CASCADE', eager: true })
   @JoinColumn({ name: 'room_id' })
-  @Index()
   room: Room;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE', eager: true })

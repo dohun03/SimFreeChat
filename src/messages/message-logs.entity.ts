@@ -1,7 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 import { MessageType } from '../messages/messages.entity';
 
 @Entity('message_log')
+@Index('idx_message_content_fulltext', ['messageContent'], { fulltext: true })
+@Index('idx_action_created_at', ['action', 'createdAt'])
+@Index('idx_room_name_fulltext', ['roomName'], { fulltext: true })
+@Index('idx_user_name_fulltext', ['userName'], { fulltext: true })
 export class MessageLog {
   @PrimaryGeneratedColumn()
   id: number;
