@@ -40,9 +40,6 @@ export class AuthService {
 
   // 로그아웃 로직
   async logOut(sessionId: string): Promise<void> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new BadRequestException('로그인 되어있지 않은 사용자입니다.');
-
     await this.redisService.deleteSession(sessionId);
   }
 }

@@ -1,6 +1,5 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
 import { ILike, Repository } from 'typeorm';
@@ -19,7 +18,6 @@ export class MessagesService {
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly redisService: RedisService,
   ) {}
 
   async createMessage(roomId: number, userId: number, content: string, type: string): Promise<ResponseMessageDto> {
@@ -122,14 +120,11 @@ export class MessagesService {
     });
   }
 
-  async getAllMessageLogs(sessionId: string, query: any): Promise<{ messageLogs: MessageLog[], totalCount: number }> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-  
+  async getAllMessageLogs(userId: number, query: any): Promise<{ messageLogs: MessageLog[], totalCount: number }> {
     const admin = await this.userRepository.findOne({
-      where: { id: session.userId },
+      where: { id: userId },
     });
-    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
   
     try {
       const {

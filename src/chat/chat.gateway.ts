@@ -41,7 +41,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly chatService: ChatService,
     private readonly messagesService: MessagesService,
     private readonly roomUsersService: RoomUsersService,
-    private redisService: RedisService,
+    private readonly redisService: RedisService,
   ) {}
   
   handleConnection(client: Socket) {

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { SessionGuard } from 'src/auth/guards/session.guard';
 import { MessagesService } from './messages.service';
 
 @Controller('messages')
@@ -7,15 +8,13 @@ export class MessagesController {
     private readonly messagesService: MessagesService
   ) {}
 
+  @UseGuards(SessionGuard)
   @Get('logs')
   async getAllMessageLogs(
     @Req() req: any,
     @Query() query: any
   ) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
-    return this.messagesService.getAllMessageLogs(sessionId, query);
+    return this.messagesService.getAllMessageLogs(req.user.userId, query);
   }
 
   @Get('/:roomId')

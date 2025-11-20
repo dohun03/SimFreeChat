@@ -1,24 +1,23 @@
-import { BadRequestException, Body, Controller, Get, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { LoginUserDto } from './dto/login-user.dto';
 import { AuthService } from './auth.service';
 import { ChatService } from 'src/chat/chat.service';
-import { RedisService } from 'src/redis/redis.service';
+import { SessionGuard } from './guards/session.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly chatService: ChatService,
-    private readonly redisService: RedisService,
-  ) {} // 서비스 클래스 자동 주입, 서비스의 메서드 호출 가능
+  ) {}
 
   @Post('login')
   async logIn(
     @Body() loginUserDto: LoginUserDto,
     @Req() req: any,
     @Res({ passthrough: true}) res: Response
-  ) { // CreateUserDto 타입으로 매핑
+  ) {
     const existingSessionId = req.cookies['SESSIONID'];
     if(existingSessionId) {
       throw new BadRequestException('이미 로그인 되어있는 사용자입니다.');
@@ -35,16 +34,14 @@ export class AuthController {
     return safeUser;
   }
 
+  @UseGuards(SessionGuard)
   @Post('logout')
-  async logOut(@Req() req: any, @Res({ passthrough: true }) res: Response) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
-    await this.chatService.leaveAllRooms(session.userId);
-    await this.authService.logOut(sessionId);
+  async logOut(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    await this.chatService.leaveAllRooms(req.user.userId);
+    await this.authService.logOut(req.user.sessionId);
 
     res.clearCookie('SESSIONID', {
       httpOnly: true,

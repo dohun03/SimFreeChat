@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomsService } from './rooms.service';
 import { ChatService } from 'src/chat/chat.service';
+import { SessionGuard } from 'src/auth/guards/session.guard';
 
 @Controller('rooms')
 export class RoomsController {
@@ -12,43 +13,37 @@ export class RoomsController {
   ) {}
 
   // 방 생성
+  @UseGuards(SessionGuard)
   @Post()
   create(
     @Body() createRoomDto: CreateRoomDto,
     @Req() req: any
   ) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-    
-    return this.roomsService.createRoom(sessionId, createRoomDto);
+    return this.roomsService.createRoom(req.user.userId, createRoomDto);
   }
 
   // 방 수정
+  @UseGuards(SessionGuard)
   @Patch('/:roomId')
   async update(
     @Param('roomId', ParseIntPipe) roomId: number,
     @Body() updateRoomDto: UpdateRoomDto,
     @Req() req: any
   ) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-    
-    const room = await this.roomsService.updateRoom(roomId, sessionId, updateRoomDto);
+    const room = await this.roomsService.updateRoom(roomId, req.user.userId, updateRoomDto);
     this.chatService.updateRoom(roomId, room);
 
     return room;
   }
 
   // 방 삭제
+  @UseGuards(SessionGuard)
   @Delete('/:roomId')
   async delete(
     @Param('roomId', ParseIntPipe) roomId: number,
     @Req() req: any
   ) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-    
-    await this.roomsService.deleteRoom(roomId, sessionId);
+    await this.roomsService.deleteRoom(roomId, req.user.userId);
     await this.chatService.deleteRoom(roomId);
 
     return { message: '삭제 되었습니다.' };
@@ -61,14 +56,9 @@ export class RoomsController {
   }
 
   // 방 하나 조회
+  @UseGuards(SessionGuard)
   @Get('/:roomId')
-  getById(
-    @Param('roomId') roomId: number,
-    @Req() req: any
-  ) {
-    const sessionId = req.cookies['SESSIONID'];
-    if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
-    return this.roomsService.getRoomById(sessionId, roomId);
+  getById( @Param('roomId') roomId: number ) {
+    return this.roomsService.getRoomById(roomId);
   }
 }

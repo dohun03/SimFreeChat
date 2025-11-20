@@ -23,11 +23,11 @@ export class RoomUsersService {
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
-        owner: owner.userId
+        owner: { id: owner.userId }
       }
     });
-    if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
-    if (room.owner.id!==owner.userId) throw new UnauthorizedException('권한이 없습니다.');
+    console.log(room);
+    if (!room) throw new UnauthorizedException('방장만 수행할 수 있습니다.');
     if (room.owner.id === userId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
 
     let roomUser = await this.roomUserRepository.findOne({
@@ -48,14 +48,11 @@ export class RoomUsersService {
     await this.roomUserRepository.save(bannedUser);
   }
 
-  async unBanUserById(roomId: number, userId: number, sessionId: string): Promise<void> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async unBanUserById(roomId: number, userId: number, ownerId: number): Promise<boolean> {
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
-        owner: session.userId
+        owner: { id: ownerId }
       }
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
@@ -67,6 +64,8 @@ export class RoomUsersService {
       });
       
       if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
+
+      return true;
     } catch (err) {
       console.error('밴 해제 중 DB 삭제 에러:', err);
       throw new InternalServerErrorException('밴 해제 처리 중 오류가 발생했습니다.');

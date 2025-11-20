@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -42,12 +42,9 @@ export class UsersService {
   }
 
   // 본인 프로필 불러오기
-  async getMyProfile(sessionId: string): Promise<Omit<User, 'password'>> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async getMyProfile(userId: number): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({
-      where: { id: session.userId }
+      where: { id: userId }
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
@@ -71,26 +68,21 @@ export class UsersService {
   }
 
   // 모든 사용자 조회 (관리자)
-  async getAll(sessionId: string, search?: string): Promise<User[]> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async getAll(userId: number, search?: string): Promise<User[]> {
     const admin = await this.userRepository.findOne({
-      where: { id: session.userId }
+      where: { id: userId }
     });
-    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
-    const where: any = new Object();
-
-    if (search) {
-      where.OR = [
+    const where = search
+    ? [
         { name: Like(`%${search}%`) },
-        { email: Like(`%${search}%`)}
+        { email: Like(`%${search}%`) }
       ]
-    }
+    : undefined;
 
     const users = await this.userRepository.find({
-      where: where.OR,
+      where,
       select: ['id', 'name', 'email', 'isAdmin', 'createdAt', 'updatedAt']
     });
     if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');
@@ -99,12 +91,9 @@ export class UsersService {
   }
 
   // 본인 프로필 수정하기
-  async updateMyProfile(sessionId: string, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async updateMyProfile(userId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
     const user = await this.userRepository.findOne({
-      where: { id: session.userId }
+      where: { id: userId }
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
 
@@ -147,21 +136,18 @@ export class UsersService {
   }
 
   // 특정 사용자 프로필 수정하기 (관리자)
-  async updateUserById(sessionId: string, userId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async updateUserById(adminId: number, userId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
     const admin = await this.userRepository.findOne({
-      where: { id: session.userId },
+      where: { id: adminId },
       select: ['id', 'isAdmin']
     });
-    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: userId }
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
-    if (user.isAdmin) throw new UnauthorizedException('관리자 정보는 수정할 수 없습니다.');
+    if (user.isAdmin) throw new ForbiddenException('관리자 정보는 수정할 수 없습니다.');
 
     if (updateUserDto.name) user.name = updateUserDto.name;
 
@@ -180,22 +166,19 @@ export class UsersService {
   }
 
   // 특정 사용자 삭제하기 (관리자)
-  async deleteUserById(sessionId: string, userId: number): Promise<void> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async deleteUserById(adminId: number, userId: number): Promise<void> {
     const admin = await this.userRepository.findOne({
-      where: { id: session.userId },
+      where: { id: adminId },
       select: ['id', 'isAdmin']
     });
-    if (!admin?.isAdmin) throw new UnauthorizedException('권한이 없습니다.');
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
     const user = await this.userRepository.findOne({
       where: { id: userId },
       select: ['id', 'isAdmin']
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
-    if (user.isAdmin) throw new UnauthorizedException('관리자 정보는 삭제할 수 없습니다.');
+    if (user.isAdmin) throw new ForbiddenException('관리자 정보는 삭제할 수 없습니다.');
     try {
       await this.chatService.leaveAllRooms(userId);
       const result = await this.userRepository.delete({

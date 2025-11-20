@@ -1,9 +1,8 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { User } from './users.entity';
-import { RedisService } from 'src/redis/redis.service';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { ChatModule } from 'src/chat/chat.module';
 
@@ -11,10 +10,10 @@ import { ChatModule } from 'src/chat/chat.module';
   imports: [
     TypeOrmModule.forFeature([User]),
     RedisModule,
-    ChatModule
+    ChatModule,
   ],
   providers: [UsersService],
   controllers: [UsersController],
-  exports: [TypeOrmModule],
+  exports: [UsersService, TypeOrmModule],
 })
 export class UsersModule {}

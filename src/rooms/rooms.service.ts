@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Like, Repository } from 'typeorm';
@@ -7,27 +7,33 @@ import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room } from './rooms.entity';
 import * as bcrypt from 'bcrypt';
 import { RoomResponseDto } from './dto/response-room.dto';
+import { User } from 'src/users/users.entity';
 
 @Injectable()
 export class RoomsService {
   constructor(
     @InjectRepository(Room)
     private roomRepository: Repository<Room>,
-    private readonly redisService: RedisService
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private readonly redisService: RedisService,
   ) {}
 
   // 방 생성
-  async createRoom(sessionId: string, createRoomDto: CreateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
+  async createRoom(userId: number, createRoomDto: CreateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
     const { name, maxMembers, password } = createRoomDto;
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-    
+
+    const owner = await this.userRepository.findOne({
+      where: { id: userId }
+    });
+    if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
+
     let hashedPassword: string | null = null;
     if (password) hashedPassword = await bcrypt.hash(password, 10);
 
     const room = this.roomRepository.create({
       name, 
-      owner: session.userId,
+      owner,
       maxMembers,
       password: hashedPassword,
     });
@@ -44,15 +50,13 @@ export class RoomsService {
   }
 
   // 방 수정
-  async updateRoom(roomId: number, sessionId: string, updateRoomDto: UpdateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
+  async updateRoom(roomId: number, userId: number, updateRoomDto: UpdateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
     const { name, maxMembers, password } = updateRoomDto;
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
-        owner: { id: session.userId }
+        owner: { id: userId }
       }
     });
     if (!room) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
@@ -75,14 +79,16 @@ export class RoomsService {
   }
 
   // 방 삭제
-  async deleteRoom(roomId: number, sessionId: string): Promise<void> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async deleteRoom(roomId: number, userId: number): Promise<void> {
     try {
+      const owner = await this.userRepository.findOne({
+        where: { id: userId }
+      });
+      if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
+
       const result = await this.roomRepository.delete({
         id: roomId,
-        owner: session.userId,
+        owner,
       });
   
       if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
@@ -131,10 +137,7 @@ export class RoomsService {
   }
 
   // 방 하나 조회
-  async getRoomById(sessionId: string, roomId: number): Promise<RoomResponseDto> {
-    const session = await this.redisService.getSession(sessionId);
-    if (!session) throw new UnauthorizedException('세션이 존재하지 않습니다.');
-
+  async getRoomById(roomId: number): Promise<RoomResponseDto> {
     const room = await this.roomRepository.findOne({ where: { id: roomId } });
     if (!room) throw new NotFoundException('존재하지 않는 방입니다.');
 
