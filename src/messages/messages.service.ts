@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
-import { ILike, Repository } from 'typeorm';
+import { DataSource, ILike, Repository } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
@@ -10,6 +10,7 @@ import { Message, MessageType } from './messages.entity';
 @Injectable()
 export class MessagesService {
   constructor(
+    private dataSource: DataSource,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(MessageLog)
@@ -95,21 +96,29 @@ export class MessagesService {
     }
   }
 
-  async getMessagesByRoom(roomId: number, search?: string): Promise<ResponseMessageDto[]> {
-    const where: any = { room: { id: roomId } };
-    const order: any = { id: 'ASC' };
+  async getMessagesByRoom(roomId: number, search?: string, cursor?: string): Promise<ResponseMessageDto[]> {
+    const parsedCursor = Number(cursor) || 0;
 
+    const qb = this.messageRepository
+    .createQueryBuilder('m')
+    .leftJoinAndSelect('m.user', 'u')
+    .where('m.room_id = :roomId', { roomId })
+    .andWhere('m.is_deleted = 0')
+    .orderBy('m.id', 'DESC')
+
+    // 검색 조회
     if (search) {
-      where.content = ILike(`%${search}%`);
-      where.isDeleted = false;
-      where.type = 'text';
-      order.id = 'DESC'; // 검색 시 내림차순으로 반환.
+      qb.andWhere(parsedCursor ? 'm.id >= :cursor' : '1=1', { cursor: parsedCursor })
+      .andWhere('m.type = :type', { type: 'text' })
+      .andWhere('m.content LIKE :search', { search: `%${search}%` })
+    }
+    // 일반 조회 
+    else {
+      qb.andWhere(parsedCursor ? 'm.id < :cursor' : '1=1', { cursor: parsedCursor })
+      .limit(100)
     }
 
-    const messages = await this.messageRepository.find({
-      where,
-      order
-    });
+    const messages = await qb.getMany();
 
     return messages.map((msg) => {
       const { password, ...safeUser } = msg.user;

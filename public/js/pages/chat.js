@@ -2,6 +2,7 @@ import { escapeHtml, formatDate, router } from '../app.js'
 
 let socket = null;
 let currentRoomId = null;
+let oldestMessageId = null;
 
 function closeSocketConnection() {
   if (socket) {
@@ -186,7 +187,11 @@ export async function renderChatRoom(container, user, roomId) {
 
           <!-- 채팅 메시지 영역 -->
           <div id="chat-messages" class="border rounded p-2 overflow-auto" style="height: 600px; background-color: #fff;">
-            <ul id="messages-list" class="list-group list-group-flush"></ul>
+          <button id="more-btn" class="btn btn-outline-secondary btn-sm w-100 mb-2">
+          더보기
+        </button>
+            <ul id="messages-list" class="list-group list-group-flush">
+            </ul>
           </div>
         </div>
 
@@ -427,16 +432,23 @@ export async function renderChatRoom(container, user, roomId) {
     });
     if (!res.ok) throw new Error('메시지를 불러오는 중 오류가 발생했습니다.');
     
-    const messages = await res.json();
+    let messages = await res.json();
+    messages = messages.reverse();
 
-    function scrollToBottom() {
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+    console.log(messages);
+
+    if (messages.length > 0) {
+      oldestMessageId = messages[0].id; // 가장 오래된 메시지 ID 저장
     }
-    
+
     messages.forEach(msg => {
       const li = createMessageElement(msg, user.id);
       messagesList.appendChild(li);
     });
+
+    function scrollToBottom() {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 
     // 이미지 모두 로딩 후 스크롤
     function scrollWhenReady() {
@@ -465,6 +477,33 @@ export async function renderChatRoom(container, user, roomId) {
       }
     }
     scrollWhenReady();
+
+    // 채팅 더 보기
+    const moreBtn = document.getElementById('more-btn');
+    moreBtn.addEventListener('click', async () => {
+      if (!oldestMessageId) return;
+
+      try {
+        const res = await fetch(`/api/messages/${roomId}?cursor=${oldestMessageId}`, { method: 'GET' });
+        if (!res.ok) throw new Error('메시지를 불러오는 중 오류 발생');
+
+        let olderMessages = await res.json();
+        if (olderMessages.length === 0) {
+          showSystemMessage('더 이상 메시지가 없습니다.');
+          moreBtn.disabled = true;
+          return;
+        }
+
+        oldestMessageId = olderMessages[olderMessages.length-1].id;
+
+        olderMessages.forEach(msg => {
+          const li = createMessageElement(msg, user.id);
+          messagesList.prepend(li);
+        });
+      } catch (err) {
+        showSystemMessage(err.message);
+      }
+    });
 
     // 입력 칸 높이 조절 함수
     function resizeTextarea() {
@@ -560,7 +599,7 @@ export async function renderChatRoom(container, user, roomId) {
       try {
         searchStatus = 0;
 
-        const res = await fetch(`/api/messages/${roomId}?search=${encodeURIComponent(search)}`, {
+        const res = await fetch(`/api/messages/${roomId}?search=${encodeURIComponent(search)}&cursor=${oldestMessageId}`, {
           method: 'GET'
         });
         if (!res.ok) throw new Error('메시지를 불러오는 중 오류가 발생했습니다.');
@@ -572,6 +611,8 @@ export async function renderChatRoom(container, user, roomId) {
         }
 
         searchArray = messages;
+
+        console.log(searchArray);
         
         const firstMessageId = searchArray[searchStatus].id;
         highlightMessage(firstMessageId);
