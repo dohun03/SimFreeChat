@@ -1,7 +1,7 @@
-import { router, formatDate } from "../../app.js";
+import { formatDate } from "../../app.js";
 
 export async function renderAdminMessageLogs(container, user) {
-  if (!user || !user.isAdmin) {
+  if (!user?.isAdmin) {
     container.innerHTML = '<h2 class="text-center mt-5">권한이 없습니다.</h2>';
     return;
   }
@@ -9,7 +9,8 @@ export async function renderAdminMessageLogs(container, user) {
   container.innerHTML = `
   <div class="container mt-4">
     <h2 class="mb-3">메시지 로그 관리</h2>
-    <!-- 첫 줄: 검색창 + 내용 선택 + 검색 버튼 (input group) -->
+
+    <!-- 검색창 + 검색 타입 + 버튼 -->
     <div class="input-group mb-2" style="max-width: 600px;">
       <input type="text" id="search" class="form-control form-control-sm" placeholder="검색 (유저명, 방 이름, 메시지 내용)" style="flex: 1 1 auto;">
       <select id="search-type" class="form-select form-select-sm" style="flex: 0 0 120px;">
@@ -21,13 +22,19 @@ export async function renderAdminMessageLogs(container, user) {
       <button class="btn btn-primary btn-sm" id="search-btn">검색</button>
     </div>
 
-    <!-- 둘째 줄: 좌측 필터(날짜+액션), 우측 페이징+줄 선택 -->
+    <!-- 필터 + 페이징 + 줄 선택 -->
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-      <!-- 좌측 필터 -->
       <div class="d-flex align-items-center gap-2 mb-1">
-        <input type="date" id="start-date" class="form-control form-control-sm" style="width: 130px;">
-        <span>~</span>
-        <input type="date" id="end-date" class="form-control form-control-sm" style="width: 130px;">
+        <select id="year-date" class="form-select form-select-sm" style="width: 100px;">
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+        </select>
+        <select id="month-date" class="form-select form-select-sm" style="width: 100px;">
+          <option value="">월</option>
+          ${Array.from({ length: 12 }, (_, i) => `<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
+        </select>
         <select id="action-type" class="form-select form-select-sm" style="width: 120px;">
           <option value="">[액션 타입]</option>
           <option value="SEND">SEND</option>
@@ -36,12 +43,11 @@ export async function renderAdminMessageLogs(container, user) {
         </select>
       </div>
 
-      <!-- 우측 페이징 + 줄 선택 -->
       <div class="d-flex align-items-center gap-2 mb-1">
         <select id="line" class="form-select form-select-sm" style="width: 100px;">
-          <option value="10">10줄</option>
-          <option value="50">50줄</option>
           <option value="100">100줄</option>
+          <option value="500">500줄</option>
+          <option value="1000">1000줄</option>
         </select>
 
         <nav aria-label="Page navigation">
@@ -53,17 +59,14 @@ export async function renderAdminMessageLogs(container, user) {
         </nav>
       </div>
     </div>
-    
-    <!-- 총 개수 표시줄 -->
+
+    <!-- 총 개수 표시 -->
     <div class="d-flex justify-content-between align-items-center mb-2">
-      <div>
-        <span id="total-count-info" class="fw-bold">총 0건</span>
-      </div>
+      <span id="total-count-info" class="fw-bold">총 0건</span>
     </div>
 
-    <!-- 메시지 로그 테이블 -->
-    <div class="table-responsive" 
-        style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
+    <!-- 테이블 -->
+    <div class="table-responsive" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
       <table class="table table-hover table-bordered align-middle mb-0" style="font-size: 0.8rem;">
         <col style="width: 8%">
         <col style="width: 8%">
@@ -91,11 +94,12 @@ export async function renderAdminMessageLogs(container, user) {
   </div>
   `;
 
+  // DOM Elements
   const tableBody = document.getElementById('table-body');
   const searchInput = document.getElementById('search');
   const searchType = document.getElementById('search-type');
-  const startDate = document.getElementById('start-date');
-  const endDate = document.getElementById('end-date');
+  const yearDate = document.getElementById('year-date');
+  const monthDate = document.getElementById('month-date');
   const actionType = document.getElementById('action-type');
   const searchBtn = document.getElementById('search-btn');
   const line = document.getElementById('line');
@@ -104,109 +108,132 @@ export async function renderAdminMessageLogs(container, user) {
   const currentPageInfo = document.getElementById('current-page-info');
   const totalCountInfo = document.getElementById('total-count-info');
 
-  let currentPage = 1;
-  let total;
+  // 상태 관리
+  const state = {
+    currentPage: 1,
+    total: 0,
+    firstId: null,
+    lastId: null,
+    year: new Date().getFullYear(),
+    month: ''
+  };
 
-  function goPage(value) {
-    const totalPages = Math.ceil(total / line.value);
-    const nextPage = currentPage + value;
-  
-    if (nextPage < 1 || nextPage > totalPages) {
-      alert('이동할 페이지가 없습니다.');
-      return;
-    }
-  
-    currentPage = nextPage;
-    renderTable();
+  function getDateRange(year, month) {
+    if (!year) return { startDate: null, endDate: null };
+    if (!month) return { startDate: `${year}-01-01`, endDate: `${year}-12-31` };
+
+    const lastDay = new Date(year, Number(month), 0).getDate();
+
+    return { startDate: `${year}-${month}-01`, endDate: `${year}-${month}-${lastDay}` };
   }
-  
-  async function renderTable() {
-    try {
-      const payload = {
-        search: searchInput.value.trim(),
-        searchType: searchType.value,
-        startDate: startDate.value,
-        endDate: endDate.value,
-        actionType: actionType.value,
-        line: line.value,
-        currentPage: currentPage,
-      };
-  
-      const queryString = new URLSearchParams(payload).toString();
-      const res = await fetch(`/api/messages/logs?${queryString}`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('메시지 로그를 불러오는 중 오류 발생');
-  
-      const { messageLogs, totalCount } = await res.json();
-  
-      tableBody.innerHTML = '';
-      messageLogs.forEach(log => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = log.id;
-        tr.innerHTML = `
-          <td>${log.id}</td>
-          <td>${log.roomId}</td>
-          <td>${log.roomName}</td>
-          <td>${log.userId}</td>
-          <td class="text-truncate" style="max-width: 150px;">${log.userName}</td>
-          <td class="text-truncate" style="max-width: 200px;">${log.messageContent}</td>
-          <td>${log.action}</td>
-          <td>${formatDate(log.createdAt)}</td>
-        `;
-        tableBody.appendChild(tr);
-      });
 
-      total = totalCount;
-      totalCountInfo.innerHTML = `총 ${totalCount}건`;
-  
-      const totalPages = Math.ceil(total / line.value);
-      currentPageInfo.innerText = `${currentPage} / ${totalPages}`;
+  function getQueryPayload(cursor = null, direction = null) {
+    const { startDate, endDate } = getDateRange(state.year, state.month);
+
+    const payload = {
+      search: searchInput.value.trim(),
+      searchType: searchType.value,
+      startDate,
+      endDate,
+      actionType: actionType.value,
+      line: line.value
+    };
+
+    if (cursor) payload.cursor = cursor;
+    if (direction) payload.direction = direction;
+
+    return payload;
+  }
+
+  function renderTableRows(messageLogs, reverse = false) {
+    if (reverse) messageLogs = messageLogs.reverse();
+    tableBody.innerHTML = '';
+    messageLogs.forEach(log => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = log.id;
+      tr.innerHTML = `
+        <td>${log.id}</td>
+        <td>${log.roomId}</td>
+        <td>${log.roomName}</td>
+        <td>${log.userId}</td>
+        <td class="text-truncate" style="max-width: 150px;">${log.userName}</td>
+        <td class="text-truncate" style="max-width: 200px;">${log.messageContent}</td>
+        <td>${log.action}</td>
+        <td>${formatDate(log.createdAt)}</td>
+      `;
+      tableBody.appendChild(tr);
+    });
+
+    if (messageLogs.length > 0) {
+      state.firstId = messageLogs[messageLogs.length - 1].id;
+      state.lastId = messageLogs[0].id;
+    }
+  }
+
+  function updatePaginationInfo() {
+    totalCountInfo.innerText = `총 ${Number(state.total).toLocaleString()}건`;
+    const totalPages = Math.ceil(state.total / line.value);
+    currentPageInfo.innerText = `${state.currentPage} / ${totalPages}`;
+  }
+
+  async function loadPage({ cursor = null, direction = null } = {}) {
+    try {
+      const payload = getQueryPayload(cursor, direction);
+      const queryString = new URLSearchParams(payload).toString();
+      const res = await fetch(`/api/messages/logs?${queryString}`, { method: 'GET', credentials: 'include' });
+      if (!res.ok) throw new Error('메시지 로그를 불러오는 중 오류 발생');
+
+      let { messageLogs, totalCount } = await res.json();
+      if (direction === 'prev') messageLogs = messageLogs.reverse();
+
+      state.total = totalCount;
+      renderTableRows(messageLogs);
+      updatePaginationInfo();
     } catch (err) {
       console.error(err);
     }
   }
 
-  searchBtn.addEventListener('click', () => {
-    currentPage = 1;
-    renderTable();
-  });
+  function resetAndLoadPage() {
+    state.currentPage = 1;
+    loadPage();
+  }
 
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key==='Enter') {
-      currentPage = 1;
-      renderTable();
+  function goPage(direction) {
+    const totalPages = Math.ceil(state.total / line.value);
+
+    if (direction === 'prev') {
+      if (state.currentPage <= 1) return alert('이동할 페이지가 없습니다.');
+
+      state.currentPage -= 1;
+      loadPage({ cursor: state.lastId, direction: 'prev' });
+    } else if (direction === 'next') {
+      if (state.currentPage >= totalPages) return alert('이동할 페이지가 없습니다.');
+
+      state.currentPage += 1;
+      loadPage({ cursor: state.firstId, direction: 'next' });
     }
+  }
+
+  // 이벤트 핸들러
+  searchBtn.addEventListener('click', resetAndLoadPage);
+
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') resetAndLoadPage(); });
+
+  [searchType, actionType, line].forEach(el => el.addEventListener('change', resetAndLoadPage));
+
+  yearDate.addEventListener('change', (e) => {
+    state.year = e.target.value;
+    resetAndLoadPage();
   });
 
-  startDate.addEventListener('change', () => {
-    currentPage = 1;
-    renderTable();
+  monthDate.addEventListener('change', (e) => {
+    state.month = e.target.value;
+    resetAndLoadPage();
   });
+  
+  prevPageBtn.addEventListener('click', () => goPage('prev'));
+  nextPageBtn.addEventListener('click', () => goPage('next'));
 
-  endDate.addEventListener('change', () => {
-    currentPage = 1;
-    renderTable();
-  });
-
-  searchType.addEventListener('change', () => {
-    currentPage = 1;
-    renderTable();
-  });
-
-  actionType.addEventListener('change', () => {
-    currentPage = 1;
-    renderTable();
-  });
-
-  line.addEventListener('change', () => {
-    currentPage = 1;
-    renderTable();
-  });
-
-  prevPageBtn.addEventListener('click', () => goPage(-1));
-  nextPageBtn.addEventListener('click', () => goPage(1));
-
-  renderTable();
+  loadPage();
 }

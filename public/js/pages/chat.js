@@ -208,7 +208,7 @@ export async function renderChatRoom(container, user, roomId) {
         </div>
       </div>
 
-      <div class="mt-3 hstack gap-3">
+      <div class="mt-3 mb-3 hstack gap-3">
         <!-- 사진 업로드 버튼 -->
         <button type="button" id="chat-upload-btn" class="btn btn-outline-success align-self-start" title="사진 업로드">
           <i class="bi bi-card-image"></i>

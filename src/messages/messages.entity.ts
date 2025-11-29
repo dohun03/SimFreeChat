@@ -8,8 +8,6 @@ export enum MessageType {
 }
 
 @Entity()
-@Index('idx_room_id_id', ['room', 'id'])
-@Index('idx_message_content_fulltext', ['content'], { fulltext: true })
 export class Message {
   @PrimaryGeneratedColumn()
   id: number;

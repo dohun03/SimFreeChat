@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
@@ -10,7 +10,6 @@ import { Message, MessageType } from './messages.entity';
 @Injectable()
 export class MessagesService {
   constructor(
-    private dataSource: DataSource,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(MessageLog)
@@ -103,8 +102,7 @@ export class MessagesService {
     .createQueryBuilder('m')
     .leftJoinAndSelect('m.user', 'u')
     .where('m.room_id = :roomId', { roomId })
-    .andWhere('m.is_deleted = 0')
-    .orderBy('m.id', 'DESC')
+    .orderBy('m.id', 'DESC');
 
     // 검색 조회
     if (search) {
@@ -112,7 +110,7 @@ export class MessagesService {
       .andWhere('m.type = :type', { type: 'text' })
       .andWhere('m.content LIKE :search', { search: `%${search}%` })
     }
-    // 일반 조회 
+    // 일반 조회
     else {
       qb.andWhere(parsedCursor ? 'm.id < :cursor' : '1=1', { cursor: parsedCursor })
       .limit(100)
@@ -129,10 +127,25 @@ export class MessagesService {
     });
   }
 
-  async getAllMessageLogs(userId: number, query: any): Promise<{ messageLogs: MessageLog[], totalCount: number }> {
-    const admin = await this.userRepository.findOne({
-      where: { id: userId },
-    });
+  private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
+
+  checkQuery(userId: number, query: any): boolean {
+    const newQuery = JSON.stringify(query);
+    const cache = this.userQueryCache.get(userId);
+    // 처음 조회하거나, 조건이 바뀐 경우 = count 실행 필요
+    if (!cache || cache.query !== newQuery) {
+      return true;
+    }
+  
+    // 조건 동일 = count 필요 없음
+    return false;
+  }
+  
+  async getAllMessageLogs(
+    userId: number,
+    query: any
+  ): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
+    const admin = await this.userRepository.findOne({ where: { id: userId } });
     if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
   
     try {
@@ -143,29 +156,58 @@ export class MessagesService {
         endDate,
         actionType,
         line,
-        currentPage,
+        cursor,
+        direction,
       } = query;
   
-      const limit = Number(line) || 10;
-      const page = Number(currentPage) || 1;
-      const offset = (page - 1) * limit;
-  
-      const qb = this.messageLogRepository.createQueryBuilder('log');
+      const rawQb = this.messageLogRepository.createQueryBuilder('log');
+      const countQb = this.messageLogRepository.createQueryBuilder('log');
+
+      if (direction === 'prev') {
+        rawQb.andWhere('log.id > :cursor', { cursor }).orderBy('log.created_at', 'ASC');
+      } else if (direction === 'next') {
+        rawQb.andWhere('log.id < :cursor', { cursor }).orderBy('log.created_at', 'DESC');
+      } else {
+        rawQb
+        .orderBy('log.created_at', 'DESC');
+      }
   
       // 검색 조건
       if (search) {
         switch (searchType) {
           case 'message':
-            qb.andWhere('log.message_content LIKE :search', { search: `%${search}%` });
+            rawQb.andWhere('log.message_content LIKE :search', {
+              search: `%${search}%`,
+            });
+            countQb.andWhere('log.message_content LIKE :search', {
+              search: `%${search}%`,
+            });
             break;
+  
           case 'user':
-            qb.andWhere('log.user_name LIKE :search', { search: `%${search}%` });
+            rawQb.andWhere('log.user_name LIKE :search', {
+              search: `%${search}%`,
+            });
+            countQb.andWhere('log.user_name LIKE :search', {
+              search: `%${search}%`,
+            });
             break;
+  
           case 'room':
-            qb.andWhere('log.room_name LIKE :search', { search: `%${search}%` });
+            rawQb.andWhere('log.room_name LIKE :search', {
+              search: `%${search}%`,
+            });
+            countQb.andWhere('log.room_name LIKE :search', {
+              search: `%${search}%`,
+            });
             break;
+  
           default:
-            qb.andWhere(
+            rawQb.andWhere(
+              '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)',
+              { search: `%${search}%` },
+            );
+            countQb.andWhere(
               '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)',
               { search: `%${search}%` },
             );
@@ -175,31 +217,72 @@ export class MessagesService {
   
       // 액션 타입 조건
       if (actionType) {
-        qb.andWhere('log.action = :action', { action: actionType });
+        rawQb.andWhere('log.action = :action', { action: actionType });
+        countQb.andWhere('log.action = :action', { action: actionType });
       }
   
       // 날짜 조건
       if (startDate) {
-        qb.andWhere('log.created_at >= :startDate', { startDate });
+        rawQb.andWhere('log.created_at >= :startDate', { startDate });
+        countQb.andWhere('log.created_at >= :startDate', { startDate });
       }
       if (endDate) {
-        qb.andWhere('log.created_at <= :endDate', { endDate: `${endDate} 23:59:59` });
+        rawQb.andWhere('log.created_at <= :endDate', {
+          endDate: `${endDate} 23:59:59`,
+        });
+        countQb.andWhere('log.created_at <= :endDate', {
+          endDate: `${endDate} 23:59:59`,
+        });
       }
   
-      // 전체 개수 조회
-      const totalCount = await qb.getCount();
-  
-      // 데이터 조회 (페이징)
-      const messageLogs = await qb
-        .orderBy('log.created_at', 'DESC')
-        .limit(limit)
-        .offset(offset)
+      // raw 데이터 조회 (항상 실행)
+      const messageLogs = await rawQb
+        .limit(Number(line) || 100)
         .getMany();
+  
+      // 캐시 여부 체크
+      const needCount = this.checkQuery(userId, {
+        search,
+        searchType,
+        startDate,
+        endDate,
+        actionType,
+      });
+  
+      let totalCount: any = 0;
+  
+      if (needCount) {
+        const row = await countQb
+          .select('COUNT(log.created_at)', 'totalCount')
+          .getRawOne();
+
+        totalCount = Number(row.totalCount);
+  
+        // 캐시에 저장
+        this.userQueryCache.set(userId, {
+          query: JSON.stringify({
+            search,
+            searchType,
+            startDate,
+            endDate,
+            actionType,
+          }),
+          totalCount,
+        });
+  
+        console.log('count 실행 (조건 변경됨)');
+      } else {
+        // count 스킵 (캐시 totalCount 사용)
+        totalCount = this.userQueryCache.get(userId)?.totalCount;
+        console.log('count 스킵');
+      }
   
       return { messageLogs, totalCount };
     } catch (err) {
       console.error('메시지 로그 조회 중 오류 발생:', err);
-      throw new InternalServerErrorException('메시지 로그 조회 중 문제가 발생했습니다.');
+      throw new InternalServerErrorException(
+        '메시지 로그 조회 중 문제가 발생했습니다.',
+      );
     }
-  }  
+  }
 }
