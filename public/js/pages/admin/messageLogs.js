@@ -35,6 +35,11 @@ export async function renderAdminMessageLogs(container, user) {
           <option value="">월</option>
           ${Array.from({ length: 12 }, (_, i) => `<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
         </select>
+        <select id="message-type" class="form-select form-select-sm" style="width: 130px;">
+          <option value="">[메시지 타입]</option>
+          <option value="TEXT">TEXT</option>
+          <option value="IMAGE">IMAGE</option>
+        </select>
         <select id="action-type" class="form-select form-select-sm" style="width: 120px;">
           <option value="">[액션 타입]</option>
           <option value="SEND">SEND</option>
@@ -68,21 +73,25 @@ export async function renderAdminMessageLogs(container, user) {
     <!-- 테이블 -->
     <div class="table-responsive" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
       <table class="table table-hover table-bordered align-middle mb-0" style="font-size: 0.8rem;">
+        <col style="width: 6%">
+        <col style="width: 6%">
+        <col style="width: 14%">
+        <col style="width: 6%">
+        <col style="width: 6%">
+        <col style="width: 14%">
         <col style="width: 8%">
-        <col style="width: 8%">
-        <col style="width: 16%">
-        <col style="width: 8%">
-        <col style="width: 16%">
         <col>
         <col style="width: 80px">
-        <col style="width: 20%">
+        <col style="width: 15%">
         <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
           <tr>
             <th>로그 ID</th>
             <th>방 ID</th>
             <th>방 이름</th>
+            <th>방장 ID</th>
             <th>유저 ID</th>
             <th>유저 이름</th>
+            <th>메시지 타입</th>
             <th>메시지 내용</th>
             <th>액션</th>
             <th>시각</th>
@@ -90,6 +99,21 @@ export async function renderAdminMessageLogs(container, user) {
         </thead>
         <tbody id="table-body"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- 메시지 전체보기 Modal -->
+  <div class="modal fade" id="messageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">메시지 내용</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <pre id="messageModalContent" style="white-space: pre-wrap; font-size:14px;"></pre>
+        </div>
+      </div>
     </div>
   </div>
   `;
@@ -100,6 +124,7 @@ export async function renderAdminMessageLogs(container, user) {
   const searchType = document.getElementById('search-type');
   const yearDate = document.getElementById('year-date');
   const monthDate = document.getElementById('month-date');
+  const messageType = document.getElementById('message-type');
   const actionType = document.getElementById('action-type');
   const searchBtn = document.getElementById('search-btn');
   const line = document.getElementById('line');
@@ -135,6 +160,7 @@ export async function renderAdminMessageLogs(container, user) {
       searchType: searchType.value,
       startDate,
       endDate,
+      messageType: messageType.value,
       actionType: actionType.value,
       line: line.value
     };
@@ -155,9 +181,15 @@ export async function renderAdminMessageLogs(container, user) {
         <td>${log.id}</td>
         <td>${log.roomId}</td>
         <td>${log.roomName}</td>
+        <td>${log.roomOwnerId}</td>
         <td>${log.userId}</td>
         <td class="text-truncate" style="max-width: 150px;">${log.userName}</td>
-        <td class="text-truncate" style="max-width: 200px;">${log.messageContent}</td>
+        <td class="text-truncate" style="max-width: 200px;">${log.type}</td>
+        <td class="text-truncate message-cell" 
+            style="max-width: 200px; cursor: pointer;"
+            data-full="${log.messageContent?.replace(/"/g, '&quot;')}">
+            ${log.messageContent}
+        </td>
         <td>${log.action}</td>
         <td>${formatDate(log.createdAt)}</td>
       `;
@@ -220,7 +252,7 @@ export async function renderAdminMessageLogs(container, user) {
 
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') resetAndLoadPage(); });
 
-  [searchType, actionType, line].forEach(el => el.addEventListener('change', resetAndLoadPage));
+  [searchType, messageType, actionType, line].forEach(el => el.addEventListener('change', resetAndLoadPage));
 
   yearDate.addEventListener('change', (e) => {
     state.year = e.target.value;
@@ -234,6 +266,18 @@ export async function renderAdminMessageLogs(container, user) {
   
   prevPageBtn.addEventListener('click', () => goPage('prev'));
   nextPageBtn.addEventListener('click', () => goPage('next'));
+
+  // message_content 클릭 시 모달 표시
+  document.addEventListener('click', (e) => {
+    const cell = e.target.closest('.message-cell');
+    if (!cell) return;
+
+    const fullText = cell.dataset.full || '';
+    document.getElementById('messageModalContent').innerText = fullText;
+
+    const modal = new bootstrap.Modal(document.getElementById('messageModal'));
+    modal.show();
+  });
 
   loadPage();
 }

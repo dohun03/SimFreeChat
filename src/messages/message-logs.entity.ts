@@ -14,6 +14,9 @@ export class MessageLog {
   @Column({ name: 'room_name', length: 100 })
   roomName: string;
 
+  @Column({ name: 'room_owner_id' })
+  roomOwnerId: number;
+
   @Column({ name: 'user_id' })
   userId: number;
 

@@ -20,6 +20,20 @@ export class MessagesService {
     private readonly userRepository: Repository<User>,
   ) {}
 
+  private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
+
+  checkQuery(userId: number, query: any): boolean {
+    const newQuery = JSON.stringify(query);
+    const cache = this.userQueryCache.get(userId);
+    // 처음 조회하거나, 조건이 바뀐 경우 = count 실행 필요
+    if (!cache || cache.query !== newQuery) {
+      return true;
+    }
+  
+    // 조건 동일 = count 필요 없음
+    return false;
+  }
+
   async createMessage(roomId: number, userId: number, content: string, type: string): Promise<ResponseMessageDto> {
     try {
       const [room, user] = await Promise.all([
@@ -42,6 +56,7 @@ export class MessagesService {
       const newMessageLog = this.messageLogRepository.create({
         roomId: room.id,
         roomName: room.name,
+        roomOwnerId: room.owner.id,
         userId: user.id,
         userName: user.name,
         messageId: message.id,
@@ -126,20 +141,6 @@ export class MessagesService {
       }
     });
   }
-
-  private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
-
-  checkQuery(userId: number, query: any): boolean {
-    const newQuery = JSON.stringify(query);
-    const cache = this.userQueryCache.get(userId);
-    // 처음 조회하거나, 조건이 바뀐 경우 = count 실행 필요
-    if (!cache || cache.query !== newQuery) {
-      return true;
-    }
-  
-    // 조건 동일 = count 필요 없음
-    return false;
-  }
   
   async getAllMessageLogs(
     userId: number,
@@ -154,6 +155,7 @@ export class MessagesService {
         searchType,
         startDate,
         endDate,
+        messageType,
         actionType,
         line,
         cursor,
@@ -214,7 +216,13 @@ export class MessagesService {
             break;
         }
       }
-  
+
+      // 액션 타입 조건
+      if (messageType) {
+        rawQb.andWhere('log.type = :type', { type: messageType });
+        countQb.andWhere('log.type = :type', { type: messageType });
+      }
+      
       // 액션 타입 조건
       if (actionType) {
         rawQb.andWhere('log.action = :action', { action: actionType });
@@ -246,6 +254,7 @@ export class MessagesService {
         searchType,
         startDate,
         endDate,
+        messageType,
         actionType,
       });
   
