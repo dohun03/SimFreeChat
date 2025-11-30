@@ -274,6 +274,7 @@ export class MessagesService {
             searchType,
             startDate,
             endDate,
+            messageType,
             actionType,
           }),
           totalCount,
