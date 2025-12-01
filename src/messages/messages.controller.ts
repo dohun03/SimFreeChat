@@ -17,6 +17,12 @@ export class MessagesController {
     return this.messagesService.getAllMessageLogs(req.user.userId, query);
   }
 
+  @UseGuards(SessionGuard)
+  @Get('log/metadata')
+  async getMessageLogMetaData() {
+    return this.messagesService.getMessageLogMetaData();
+  }
+
   @Get('/:roomId')
   async getMessagesByRoom(
     @Param('roomId') roomId: number,

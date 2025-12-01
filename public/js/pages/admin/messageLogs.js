@@ -46,6 +46,9 @@ export async function renderAdminMessageLogs(container, user) {
           <option value="EDIT">EDIT</option>
           <option value="DELETE">DELETE</option>
         </select>
+        <select id="room-id-type" class="form-select form-select-sm" style="width: 120px;"></select>
+        <select id="room-owner-id-type" class="form-select form-select-sm" style="width: 120px;"></select>
+        <select id="user-id-type" class="form-select form-select-sm" style="width: 120px;"></select>
       </div>
 
       <div class="d-flex align-items-center gap-2 mb-1">
@@ -73,18 +76,20 @@ export async function renderAdminMessageLogs(container, user) {
     <!-- 테이블 -->
     <div class="table-responsive" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
       <table class="table table-hover table-bordered align-middle mb-0" style="font-size: 0.8rem;">
-        <col style="width: 6%">
-        <col style="width: 6%">
+        <col style="width: 5%">
+        <col style="width: 5%">
+        <col style="width: 5%">
         <col style="width: 14%">
-        <col style="width: 6%">
-        <col style="width: 6%">
+        <col style="width: 5%">
+        <col style="width: 5%">
         <col style="width: 14%">
-        <col style="width: 8%">
+        <col style="width: 7%">
         <col>
         <col style="width: 80px">
         <col style="width: 15%">
         <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
           <tr>
+            <th>No.</th>
             <th>로그 ID</th>
             <th>방 ID</th>
             <th>방 이름</th>
@@ -122,17 +127,50 @@ export async function renderAdminMessageLogs(container, user) {
   const tableBody = document.getElementById('table-body');
   const searchInput = document.getElementById('search');
   const searchType = document.getElementById('search-type');
+  const searchBtn = document.getElementById('search-btn');
   const yearDate = document.getElementById('year-date');
   const monthDate = document.getElementById('month-date');
   const messageType = document.getElementById('message-type');
   const actionType = document.getElementById('action-type');
-  const searchBtn = document.getElementById('search-btn');
+  const roomIdType = document.getElementById('room-id-type');
+  const roomOwnerIdType = document.getElementById('room-owner-id-type');
+  const userIdType = document.getElementById('user-id-type');
   const line = document.getElementById('line');
   const prevPageBtn = document.getElementById('prev-page');
   const nextPageBtn = document.getElementById('next-page');
   const currentPageInfo = document.getElementById('current-page-info');
   const totalCountInfo = document.getElementById('total-count-info');
 
+  // 메타 데이터 필터 로드
+  async function loadLogMeta() {
+    const res = await fetch('/api/messages/log/metadata');
+    const data = await res.json();
+  
+    fillSelect(roomIdType, data.roomIds, '[방 ID]');
+    fillSelect(roomOwnerIdType, data.roomOwnerIds, '[방장 ID]');
+    fillSelect(userIdType, data.userIds, '[유저 ID]');
+  }
+  
+  function fillSelect(selectEl, list, name) {
+    selectEl.innerHTML = '';
+  
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = name;
+    selectEl.appendChild(defaultOption);
+  
+    list.sort((a, b) => a - b);
+  
+    for (const value of list) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      selectEl.appendChild(option);
+    }
+  }
+  
+  loadLogMeta();
+  
   // 상태 관리
   const state = {
     currentPage: 1,
@@ -143,6 +181,7 @@ export async function renderAdminMessageLogs(container, user) {
     month: ''
   };
 
+  // 날짜 필터
   function getDateRange(year, month) {
     if (!year) return { startDate: null, endDate: null };
     if (!month) return { startDate: `${year}-01-01`, endDate: `${year}-12-31` };
@@ -152,6 +191,7 @@ export async function renderAdminMessageLogs(container, user) {
     return { startDate: `${year}-${month}-01`, endDate: `${year}-${month}-${lastDay}` };
   }
 
+  // 메시지 로그 쿼리 페이로드
   function getQueryPayload(cursor = null, direction = null) {
     const { startDate, endDate } = getDateRange(state.year, state.month);
 
@@ -162,6 +202,9 @@ export async function renderAdminMessageLogs(container, user) {
       endDate,
       messageType: messageType.value,
       actionType: actionType.value,
+      roomIdType: roomIdType.value,
+      roomOwnerIdType: roomOwnerIdType.value,
+      userIdType: userIdType.value,
       line: line.value
     };
 
@@ -171,13 +214,33 @@ export async function renderAdminMessageLogs(container, user) {
     return payload;
   }
 
-  function renderTableRows(messageLogs, reverse = false) {
-    if (reverse) messageLogs = messageLogs.reverse();
+  // 메시지 로그 테이블 렌더링
+  async function loadPage({ cursor = null, direction = null } = {}) {
+    try {
+      const payload = getQueryPayload(cursor, direction);
+      const queryString = new URLSearchParams(payload).toString();
+      const res = await fetch(`/api/messages/logs?${queryString}`, { method: 'GET', credentials: 'include' });
+      if (!res.ok) throw new Error('메시지 로그를 불러오는 중 오류 발생');
+
+      let { messageLogs, totalCount } = await res.json();
+      if (direction === 'prev') messageLogs = messageLogs.reverse();
+
+      state.total = totalCount;
+      renderTableRows(messageLogs);
+      updatePaginationInfo();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  
+  function renderTableRows(messageLogs) {
+    let count = 0;
     tableBody.innerHTML = '';
     messageLogs.forEach(log => {
       const tr = document.createElement('tr');
       tr.dataset.id = log.id;
       tr.innerHTML = `
+        <td>${++count}</td>
         <td>${log.id}</td>
         <td>${log.roomId}</td>
         <td>${log.roomName}</td>
@@ -201,29 +264,12 @@ export async function renderAdminMessageLogs(container, user) {
       state.lastId = messageLogs[0].id;
     }
   }
-
+  
+  // 페이지네이션
   function updatePaginationInfo() {
     totalCountInfo.innerText = `총 ${Number(state.total).toLocaleString()}건`;
     const totalPages = Math.ceil(state.total / line.value);
     currentPageInfo.innerText = `${state.currentPage} / ${totalPages}`;
-  }
-
-  async function loadPage({ cursor = null, direction = null } = {}) {
-    try {
-      const payload = getQueryPayload(cursor, direction);
-      const queryString = new URLSearchParams(payload).toString();
-      const res = await fetch(`/api/messages/logs?${queryString}`, { method: 'GET', credentials: 'include' });
-      if (!res.ok) throw new Error('메시지 로그를 불러오는 중 오류 발생');
-
-      let { messageLogs, totalCount } = await res.json();
-      if (direction === 'prev') messageLogs = messageLogs.reverse();
-
-      state.total = totalCount;
-      renderTableRows(messageLogs);
-      updatePaginationInfo();
-    } catch (err) {
-      console.error(err);
-    }
   }
 
   function resetAndLoadPage() {
@@ -249,35 +295,35 @@ export async function renderAdminMessageLogs(container, user) {
 
   // 이벤트 핸들러
   searchBtn.addEventListener('click', resetAndLoadPage);
-
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') resetAndLoadPage(); });
-
-  [searchType, messageType, actionType, line].forEach(el => el.addEventListener('change', resetAndLoadPage));
-
+  [searchType, messageType, actionType, roomIdType, roomOwnerIdType, userIdType, line].forEach(el => el.addEventListener('change', resetAndLoadPage));
   yearDate.addEventListener('change', (e) => {
     state.year = e.target.value;
     resetAndLoadPage();
   });
-
   monthDate.addEventListener('change', (e) => {
     state.month = e.target.value;
     resetAndLoadPage();
   });
-  
   prevPageBtn.addEventListener('click', () => goPage('prev'));
   nextPageBtn.addEventListener('click', () => goPage('next'));
 
-  // message_content 클릭 시 모달 표시
-  document.addEventListener('click', (e) => {
+  // 메시지 내용 클릭 시 모달
+  tableBody.addEventListener('click', (e) => {
     const cell = e.target.closest('.message-cell');
     if (!cell) return;
-
+  
     const fullText = cell.dataset.full || '';
     document.getElementById('messageModalContent').innerText = fullText;
-
-    const modal = new bootstrap.Modal(document.getElementById('messageModal'));
-    modal.show();
-  });
+  
+    let modalInstance = bootstrap.Modal.getInstance(document.getElementById('messageModal'));
+  
+    if (!modalInstance) {
+      modalInstance = new bootstrap.Modal(document.getElementById('messageModal'));
+    }
+  
+    modalInstance.show();
+  });  
 
   loadPage();
 }

@@ -157,6 +157,9 @@ export class MessagesService {
         endDate,
         messageType,
         actionType,
+        roomIdType,
+        roomOwnerIdType,
+        userIdType,
         line,
         cursor,
         direction,
@@ -216,18 +219,6 @@ export class MessagesService {
             break;
         }
       }
-
-      // 액션 타입 조건
-      if (messageType) {
-        rawQb.andWhere('log.type = :type', { type: messageType });
-        countQb.andWhere('log.type = :type', { type: messageType });
-      }
-      
-      // 액션 타입 조건
-      if (actionType) {
-        rawQb.andWhere('log.action = :action', { action: actionType });
-        countQb.andWhere('log.action = :action', { action: actionType });
-      }
   
       // 날짜 조건
       if (startDate) {
@@ -241,6 +232,36 @@ export class MessagesService {
         countQb.andWhere('log.created_at <= :endDate', {
           endDate: `${endDate} 23:59:59`,
         });
+      }
+
+      // 메시지 타입 조건
+      if (messageType) {
+        rawQb.andWhere('log.type = :type', { type: messageType });
+        countQb.andWhere('log.type = :type', { type: messageType });
+      }
+      
+      // 액션 타입 조건
+      if (actionType) {
+        rawQb.andWhere('log.action = :action', { action: actionType });
+        countQb.andWhere('log.action = :action', { action: actionType });
+      }
+
+      // 방 ID 조건
+      if (roomIdType) {
+        rawQb.andWhere('log.room_id = :roomId', { roomId: roomIdType });
+        countQb.andWhere('log.room_id = :roomId', { roomId: roomIdType });
+      }
+
+      // 방장 ID 조건
+      if (roomOwnerIdType) {
+        rawQb.andWhere('log.room_owner_id = :roomOwnerId', { roomOwnerId: roomOwnerIdType });
+        countQb.andWhere('log.room_owner_id = :roomOwnerId', { roomOwnerId: roomOwnerIdType });
+      }
+      
+      // 사용자 ID 조건
+      if (userIdType) {
+        rawQb.andWhere('log.user_id = :userId', { userId: userIdType });
+        countQb.andWhere('log.user_id = :userId', { userId: userIdType });
       }
   
       // raw 데이터 조회 (항상 실행)
@@ -256,6 +277,9 @@ export class MessagesService {
         endDate,
         messageType,
         actionType,
+        roomIdType,
+        roomOwnerIdType,
+        userIdType,
       });
   
       let totalCount: any = 0;
@@ -276,6 +300,9 @@ export class MessagesService {
             endDate,
             messageType,
             actionType,
+            roomIdType,
+            roomOwnerIdType,
+            userIdType,
           }),
           totalCount,
         });
@@ -295,4 +322,48 @@ export class MessagesService {
       );
     }
   }
+
+  async getMessageLogMetaData() {
+    const raw = await this.messageLogRepository.query(`
+      SELECT 'room_id' AS type, log.room_id AS value
+      FROM message_log AS log
+      GROUP BY log.room_id
+  
+      UNION ALL
+  
+      SELECT 'user_id' AS type, log.user_id AS value
+      FROM message_log AS log
+      GROUP BY log.user_id
+  
+      UNION ALL
+  
+      SELECT 'room_owner_id' AS type, log.room_owner_id AS value
+      FROM message_log AS log
+      GROUP BY log.room_owner_id;
+    `);
+  
+    const result = {
+      roomIds: [] as number[],
+      userIds: [] as number[],
+      roomOwnerIds: [] as number[],
+    };
+  
+    for (const row of raw) {
+      if (!row.value) continue;
+  
+      if (row.type === 'room_id') {
+        result.roomIds.push(row.value);
+      }
+  
+      if (row.type === 'user_id') {
+        result.userIds.push(row.value);
+      }
+  
+      if (row.type === 'room_owner_id') {
+        result.roomOwnerIds.push(row.value);
+      }
+    }
+  
+    return result;
+  }  
 }

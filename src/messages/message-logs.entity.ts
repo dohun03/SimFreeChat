@@ -11,9 +11,10 @@ import { MessageType } from '../messages/messages.entity';
 @Index('idx_user_id', ['userId'])
 @Index('idx_room_owner_id', ['roomOwnerId'])
 
-// 검색
+// 타입 검색
 @Index('idx_action', ['action'])
 @Index('idx_type', ['type'])
+
 export class MessageLog {
   @PrimaryGeneratedColumn()
   id: number;
