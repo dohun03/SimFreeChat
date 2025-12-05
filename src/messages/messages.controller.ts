@@ -26,9 +26,8 @@ export class MessagesController {
   @Get('/:roomId')
   async getMessagesByRoom(
     @Param('roomId') roomId: number,
-    @Query('search') search?: string,
-    @Query('cursor') cursor?: string
+    @Query() query: any
   ) {
-    return this.messagesService.getMessagesByRoom(roomId, search, cursor);
+    return this.messagesService.getMessagesByRoom(roomId, query);
   }
 }

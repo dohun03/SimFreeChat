@@ -34,14 +34,24 @@ export class MessagesService {
     return false;
   }
 
-  async createMessage(roomId: number, userId: number, content: string, type: string): Promise<ResponseMessageDto> {
+  async createMessage(
+    roomId: number,
+    userId: number,
+    content: string,
+    type: string
+  ): Promise<{ message: ResponseMessageDto; lastMessageId?: number }> {
     try {
       const [room, user] = await Promise.all([
         this.roomRepository.findOne({ where: { id: roomId } }),
         this.userRepository.findOne({ where: { id: userId } }),
       ]);
-    
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
+
+      const lastMessage = await this.messageRepository.findOne({
+        select: ['id'],
+        where: { room: { id: roomId } },
+        order: { id: 'DESC' },
+      });
   
       const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
 
@@ -68,8 +78,8 @@ export class MessagesService {
       
       const { password, ...safeUser } = user;
       return {
-        ...message,
-        user: safeUser,
+        message: { ...message, user: safeUser },
+        lastMessageId: lastMessage?.id,
       };
     } catch (err) {
       console.error('메시지 생성 중 에러:', err);
@@ -95,10 +105,12 @@ export class MessagesService {
       const deletedMessageLog = this.messageLogRepository.create({
         roomId: message.room.id,
         roomName: message.room.name,
+        roomOwnerId: message.room.owner.id,
         userId: message.user.id,
         userName: message.user.name,
         messageId: message.id,
         messageContent: message.content,
+        type: message.type,
         action: 'DELETE'
       });
       await this.messageLogRepository.save(deletedMessageLog);
@@ -110,25 +122,35 @@ export class MessagesService {
     }
   }
 
-  async getMessagesByRoom(roomId: number, search?: string, cursor?: string): Promise<ResponseMessageDto[]> {
-    const parsedCursor = Number(cursor) || 0;
+  async getMessagesByRoom(roomId: number, query: any): Promise<ResponseMessageDto[]> {
+    const { search, cursor, direction } = query;
+    const parsedCursor = cursor ? Number(cursor) : null;
 
     const qb = this.messageRepository
     .createQueryBuilder('m')
     .leftJoinAndSelect('m.user', 'u')
     .where('m.room_id = :roomId', { roomId })
-    .orderBy('m.id', 'DESC');
 
     // 검색 조회
     if (search) {
       qb.andWhere(parsedCursor ? 'm.id >= :cursor' : '1=1', { cursor: parsedCursor })
       .andWhere('m.type = :type', { type: 'text' })
       .andWhere('m.content LIKE :search', { search: `%${search}%` })
+      .orderBy('m.id', 'DESC');
     }
     // 일반 조회
     else {
-      qb.andWhere(parsedCursor ? 'm.id < :cursor' : '1=1', { cursor: parsedCursor })
-      .limit(100)
+      qb.limit(100);
+
+      if (parsedCursor && direction === 'before') {
+        qb.andWhere('m.id < :cursor', { cursor: parsedCursor })
+        .orderBy('m.id', 'DESC');
+      } else if (parsedCursor && direction === 'recent') {
+        qb.andWhere('m.id > :cursor', { cursor: parsedCursor })
+        .orderBy('m.id', 'ASC');
+      } else {
+        qb.orderBy('m.id', 'DESC');
+      }
     }
 
     const messages = await qb.getMany();
