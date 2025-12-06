@@ -86,13 +86,21 @@ export async function renderChatRoom(container, user, roomId) {
         <div class="flex-grow-1 position-relative">
           <!-- 시스템 알림 영역 -->
           <div id="system-alerts" class="position-absolute top-0 start-0 w-100 px-3 mt-2" style="z-index: 1050;"></div>
-
           <!-- 채팅 메시지 영역 -->
           <div id="chat-messages" class="border rounded p-2 overflow-auto" style="height: 600px; background-color: #fff;">
+            <!-- 메시지 로딩 영역 -->
             <ul id="messages-list" class="list-group list-group-flush"></ul>
+            <!-- 메시지 로딩 표시 영역 -->
             <div id="loading-indicator" class="text-center my-2" style="display: none;">
               <div class="spinner-border spinner-border-sm" role="status"></div>
               <span class="ms-2">불러오는 중...</span>
+            </div>
+            <!-- 새 메시지 알림 영역 -->
+            <div id="new-message-alert" class="position-absolute start-50 translate-middle-x d-none" style="bottom: 40px; z-index:1000;">
+              <div class="d-flex align-items-center gap-2 bg-primary text-white px-4 py-2 rounded-pill shadow-lg" style="cursor:pointer;">
+                <i class="bi bi-arrow-down-circle-fill fs-5"></i>
+                <span class="fw-semibold small">새 메시지 보기</span>
+              </div>
             </div>
           </div>
         </div>
@@ -158,6 +166,7 @@ export async function renderChatRoom(container, user, roomId) {
     const maxCount = document.getElementById('max-count');
     const chatMessages = document.getElementById('chat-messages');
     const messagesList = document.getElementById('messages-list');
+    const newMessageAlert = document.getElementById('new-message-alert');
     const loadingIndicator = document.getElementById('loading-indicator');
     const chatInput = document.getElementById('chat-input');
     const chatSubmit = document.getElementById('chat-submit');
@@ -328,7 +337,7 @@ export async function renderChatRoom(container, user, roomId) {
       });
     });
 
-    // 시스템 알림 함수
+    // 시스템 알림
     function showSystemMessage(message) {
       const systemContainer = document.getElementById('system-alerts');
       if (!systemContainer) return;
@@ -442,7 +451,7 @@ export async function renderChatRoom(container, user, roomId) {
       console.log('lastMessageId:', lastMessageId);
     }
 
-    // 메시지 로딩 표시 함수
+    // 메시지 로딩 표시
     function showLoading() {
       loadingIndicator.style.display = 'block';
     }
@@ -475,7 +484,7 @@ export async function renderChatRoom(container, user, roomId) {
     
         let messages = await res.json();
         if (messages.length === 0) {
-          showSystemMessage('더 이상 메시지가 없습니다.');
+          console.log('더 이상 메시지가 없습니다.');
           return;
         }
 
@@ -509,14 +518,12 @@ export async function renderChatRoom(container, user, roomId) {
     loadMessages();
 
     // 메시지 로드 (스크롤 이벤트)
-    const SCROLL_GAP = 20; // 오차 px
-    
-    function isAtBottom() {
-      return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - SCROLL_GAP;
+    function isAtBottom(scrollGap = 50) {
+      return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - scrollGap;
     }
 
-    function isAtTop() {
-      return chatMessages.scrollTop <= SCROLL_GAP;
+    function isAtTop(scrollGap = 50) {
+      return chatMessages.scrollTop <= scrollGap;
     }
 
     let loading = false;
@@ -540,19 +547,21 @@ export async function renderChatRoom(container, user, roomId) {
       if (!wasAtBottom && atBottom && isScrollingDown) {
         console.log("최근 메시지 로딩");
         loading = true;
+
         await loadMessages('recent');
+
         loading = false;
       }
-      
+
       // 최상단 도달
       if (!wasAtTop && atTop && isScrollingUp) {
         console.log("이전 메시지 로딩");
         loading = true;
         // 현재 최상단 메시지 ID 저장
         const firstMessageId = messagesList.firstElementChild?.dataset.id;
-      
+
         await loadMessages('before');
-      
+
         // 그 메시지를 다시 찾아서 위치 고정
         if (firstMessageId) {
           const sameMessage = messagesList.querySelector(`[data-id="${firstMessageId}"]`);
@@ -600,21 +609,19 @@ export async function renderChatRoom(container, user, roomId) {
       }
     }
 
-    // 입력 칸 높이 조절 함수
-    function resizeTextarea() {
-      chatInput.style.height = "auto";
-      const lineHeight = 24; // 1줄 높이(px)
-      const maxHeight = lineHeight * 5;
-    
-      if (chatInput.scrollHeight > maxHeight) {
-        chatInput.style.height = maxHeight + "px";
-        chatInput.style.overflowY = "auto";
-      } else {
-        chatInput.style.height = chatInput.scrollHeight + "px";
-        chatInput.style.overflowY = "hidden";
-      }
+    function showNewMessageAlert() {
+      newMessageAlert.classList.remove('d-none');
     }
-    chatInput.addEventListener('input', resizeTextarea);
+
+    function hideNewMessageAlert() {
+      newMessageAlert.classList.add('d-none');
+    }
+
+    // 클릭하면 맨 아래로 이동
+    newMessageAlert.addEventListener('click', () => {
+      loadMessages();
+      hideNewMessageAlert();
+    });
 
     // 메시지 전송
     chatSubmit.addEventListener('click', sendMessage);
@@ -640,12 +647,31 @@ export async function renderChatRoom(container, user, roomId) {
         console.log('메시지 출력');
         const li = createMessageElement(data.message, user.id);
         messagesList.appendChild(li);
-        scrollWhenReady();
+
+        if (wasAtBottom) scrollWhenReady();
+
         keepMessageLimit();
       } else {
         console.log('알림 띄우기');
+        showNewMessageAlert();
       }
     });
+
+    // 메시지 입력 칸 높이 조절
+    function resizeTextarea() {
+      chatInput.style.height = "auto";
+      const lineHeight = 24; // 1줄 높이(px)
+      const maxHeight = lineHeight * 5;
+    
+      if (chatInput.scrollHeight > maxHeight) {
+        chatInput.style.height = maxHeight + "px";
+        chatInput.style.overflowY = "auto";
+      } else {
+        chatInput.style.height = chatInput.scrollHeight + "px";
+        chatInput.style.overflowY = "hidden";
+      }
+    }
+    chatInput.addEventListener('input', resizeTextarea);
     
     // 메시지 리셋
     chatReset.addEventListener('click', () => {
@@ -675,6 +701,8 @@ export async function renderChatRoom(container, user, roomId) {
     // [메시지 삭제 Event]
     socket.on('messageDeleted', messageId => {
       const content = document.querySelector(`li[data-id="${messageId}"] .chat-content`);
+      if (!content) return;
+      
       content.innerHTML = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
     });
 
