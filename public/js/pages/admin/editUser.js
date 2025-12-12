@@ -40,7 +40,7 @@ export async function renderEditUser(container, user, userId) {
   const profileMsg = document.getElementById('profile-msg');
   const deleteBtn = document.getElementById('delete-btn');
 
-  // 🔹 프로필 수정 이벤트
+  // 프로필 수정 이벤트
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('name').value;
@@ -76,7 +76,7 @@ export async function renderEditUser(container, user, userId) {
     }
   });
 
-  // 🔹 유저 삭제 이벤트
+  // 유저 삭제 이벤트
   deleteBtn.addEventListener('click', async () => {
     if (confirm('정말 삭제하시겠습니까?')) {
       try {

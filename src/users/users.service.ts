@@ -149,11 +149,33 @@ export class UsersService {
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
     if (user.isAdmin) throw new ForbiddenException('관리자 정보는 수정할 수 없습니다.');
 
-    if (updateUserDto.name) user.name = updateUserDto.name;
+    // 닉네임 변경
+    if (updateUserDto.name) {
+      const existingUser = await this.userRepository.findOne({
+        where: { name: updateUserDto.name },
+      });
+      if (existingUser) throw new BadRequestException('이미 존재하는 사용자명입니다.');
 
-    if (updateUserDto.password) user.password = await bcrypt.hash(updateUserDto.password, 10);
+      user.name = updateUserDto.name;
+    }
 
-    if (updateUserDto.email) user.email = updateUserDto.email;
+    // 비밀번호 변경
+    if (updateUserDto.password) {
+      const isSame = await bcrypt.compare(updateUserDto.password, user.password);
+      if (isSame) throw new BadRequestException('이전과 동일한 비밀번호입니다.');
+
+      user.password = await bcrypt.hash(updateUserDto.password, 10);
+    }
+
+    // 이메일 변경
+    if (updateUserDto.email) {
+      const existingUser = await this.userRepository.findOne({
+        where: { email: updateUserDto.email },
+      });
+      if (existingUser) throw new BadRequestException('이미 사용 중인 이메일입니다.');
+
+      user.email = updateUserDto.email;
+    }
 
     try {
       await this.userRepository.save(user);
