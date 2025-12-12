@@ -3,17 +3,11 @@ import { MessageType } from '../messages/messages.entity';
 
 @Entity('message_log')
 
-// 기본정렬 & 페이징
-@Index('idx_created_at_id', ['createdAt', 'id'])
-
-// 메타 데이터 & 필터
-@Index('idx_room_id', ['roomId'])
-@Index('idx_user_id', ['userId'])
-@Index('idx_room_owner_id', ['roomOwnerId'])
-
-// 타입 검색
-@Index('idx_action', ['action'])
-@Index('idx_type', ['type'])
+// action, type은 COUNT 최적화 용도
+@Index('idx_master_action_master', ['action', 'createdAt','id'])
+@Index('idx_master_type_master', ['type', 'createdAt','id'])
+@Index('idx_master_room', ['roomId', 'createdAt', 'id'])
+@Index('idx_master_user', ['userId', 'createdAt', 'id'])
 
 export class MessageLog {
   @PrimaryGeneratedColumn()

@@ -448,7 +448,6 @@ export async function renderChatRoom(container, user, roomId) {
       }
 
       lastMessageId = messagesList.lastElementChild?.dataset.id;
-      console.log('lastMessageId:', lastMessageId);
     }
 
     // 메시지 로딩 표시
@@ -475,8 +474,6 @@ export async function renderChatRoom(container, user, roomId) {
         cursorId = messagesList.lastElementChild?.dataset.id;
         query = `?direction=${direction}&cursor=${cursorId}`;
       }
-
-      console.log("cursorId:",cursorId);
     
       try {
         const res = await fetch(`/api/messages/${roomId}${query}`);
@@ -545,7 +542,6 @@ export async function renderChatRoom(container, user, roomId) {
     
       // 최하단 도달
       if (!wasAtBottom && atBottom && isScrollingDown) {
-        console.log("최근 메시지 로딩");
         loading = true;
 
         await loadMessages('recent');
@@ -555,9 +551,8 @@ export async function renderChatRoom(container, user, roomId) {
 
       // 최상단 도달
       if (!wasAtTop && atTop && isScrollingUp) {
-        console.log("이전 메시지 로딩");
         loading = true;
-        // 현재 최상단 메시지 ID 저장
+        // 최상단 메시지 ID 저장
         const firstMessageId = messagesList.firstElementChild?.dataset.id;
 
         await loadMessages('before');
@@ -609,6 +604,7 @@ export async function renderChatRoom(container, user, roomId) {
       }
     }
 
+    // 최신 메시지 알림 및 이동
     function showNewMessageAlert() {
       newMessageAlert.classList.remove('d-none');
     }
@@ -617,7 +613,6 @@ export async function renderChatRoom(container, user, roomId) {
       newMessageAlert.classList.add('d-none');
     }
 
-    // 클릭하면 맨 아래로 이동
     newMessageAlert.addEventListener('click', () => {
       loadMessages();
       hideNewMessageAlert();

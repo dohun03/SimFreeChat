@@ -191,12 +191,16 @@ export class MessagesService {
       const countQb = this.messageLogRepository.createQueryBuilder('log');
 
       if (direction === 'prev') {
-        rawQb.andWhere('log.id > :cursor', { cursor }).orderBy('log.created_at', 'ASC');
+        rawQb
+          .andWhere('log.id > :cursor', { cursor })
+          .orderBy('log.id', 'ASC');
       } else if (direction === 'next') {
-        rawQb.andWhere('log.id < :cursor', { cursor }).orderBy('log.created_at', 'DESC');
+        rawQb
+          .andWhere('log.id < :cursor', { cursor })
+          .orderBy('log.id', 'DESC');
       } else {
         rawQb
-        .orderBy('log.created_at', 'DESC');
+          .orderBy('log.id', 'DESC');
       }
   
       // 검색 조건
@@ -385,7 +389,7 @@ export class MessagesService {
         result.roomOwnerIds.push(row.value);
       }
     }
-  
+
     return result;
-  }  
+  }
 }
