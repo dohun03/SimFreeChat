@@ -193,14 +193,17 @@ export class MessagesService {
       if (direction === 'prev') {
         rawQb
           .andWhere('log.id > :cursor', { cursor })
-          .orderBy('log.id', 'ASC');
+          .orderBy('log.created_at', 'ASC')
+          .addOrderBy('log.id', 'ASC');
       } else if (direction === 'next') {
         rawQb
           .andWhere('log.id < :cursor', { cursor })
-          .orderBy('log.id', 'DESC');
+          .orderBy('log.created_at', 'DESC')
+          .addOrderBy('log.id', 'DESC');
       } else {
         rawQb
-          .orderBy('log.id', 'DESC');
+        .orderBy('log.created_at', 'DESC')
+          .addOrderBy('log.id', 'DESC');
       }
   
       // 검색 조건

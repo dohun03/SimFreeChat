@@ -53,9 +53,9 @@ export async function renderAdminMessageLogs(container, user) {
 
       <div class="d-flex align-items-center gap-2 mb-1">
         <select id="line" class="form-select form-select-sm" style="width: 100px;">
+          <option value="50">50줄</option>
           <option value="100">100줄</option>
-          <option value="500">500줄</option>
-          <option value="1000">1000줄</option>
+          <option value="300">300줄</option>
         </select>
 
         <nav aria-label="Page navigation">

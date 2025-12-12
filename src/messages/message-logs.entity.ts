@@ -3,11 +3,17 @@ import { MessageType } from '../messages/messages.entity';
 
 @Entity('message_log')
 
-// action, type은 COUNT 최적화 용도
-@Index('idx_master_action_master', ['action', 'createdAt','id'])
-@Index('idx_master_type_master', ['type', 'createdAt','id'])
+@Index('idx_default', ['createdAt', 'id'])
 @Index('idx_master_room', ['roomId', 'createdAt', 'id'])
 @Index('idx_master_user', ['userId', 'createdAt', 'id'])
+// action, type은 COUNT 최적화 용도
+@Index('idx_master_action', ['action', 'createdAt','id'])
+@Index('idx_master_type', ['type', 'createdAt','id'])
+
+// 메타데이터 로드 최적화 용도
+@Index('idx_room_id', ['roomId'])
+@Index('idx_user_id', ['userId'])
+@Index('idx_room_owner_id', ['roomOwnerId'])
 
 export class MessageLog {
   @PrimaryGeneratedColumn()
