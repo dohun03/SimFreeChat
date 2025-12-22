@@ -178,13 +178,7 @@ export async function renderChatRoom(container, user, roomId) {
     const roomEdit = document.getElementById('room-edit');
     const roomBanManager = document.getElementById('room-ban-manager');
 
-    // Socket.io 연결
-    socket = io('http://25.9.141.41:4000', {
-      withCredentials: true,
-      // reconnection: true,
-      // reconnectionAttempts: 10,
-      // reconnectionDelay: 2000,
-    });
+    socket = io({ withCredentials: true });
 
     if (isBanned) {
       showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banReason}`);

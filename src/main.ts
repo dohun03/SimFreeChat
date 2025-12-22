@@ -12,7 +12,7 @@ async function bootstrap() {
 
   // CORS 설정
   app.enableCors({
-    origin: process.env.SOCKET_ORIGIN,
+    origin: true, // 추 후 특정 도메인(서버 주소)만 허용
     credentials: true,
   });
   
@@ -38,19 +38,20 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  const server = app.getHttpAdapter().getInstance();
-  const publicPath = join(__dirname, '..', 'public');
-  const uploadPath = join(__dirname, '..', 'uploads');
+  // [ Nginx 적용으로 정적파일 제공 코드 X ]
+  // const server = app.getHttpAdapter().getInstance();
+  // const publicPath = join(__dirname, '..', 'public');
+  // const uploadPath = join(__dirname, '..', 'uploads');
 
   // /uploads 경로는 서버 uploads 폴더와 매핑
-  server.use('/uploads', express.static(uploadPath));
+  // server.use('/uploads', express.static(uploadPath));
 
   // /api 경로 요청은 서버로, 나머지는 프론트에 index.html 제공
-  server.use(express.static(publicPath));
-  server.get(/^(?!\/api).*$/, (req, res) => {
-    res.sendFile(join(publicPath, 'index.html'));
-  });
+  // server.use(express.static(publicPath));
+  // server.get(/^(?!\/api).*$/, (req, res) => {
+  //   res.sendFile(join(publicPath, 'index.html'));
+  // });
 
-  await app.listen(process.env.PORT ?? 4000);
+  await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 }
 bootstrap();

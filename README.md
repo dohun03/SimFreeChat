@@ -84,6 +84,7 @@
 
 ## 사용한 기술 스택
 
+- **Nginx**: Reverse Proxy 및 정적 파일 서버 (API/WebSocket 프록시, gzip, 요청 제한 적용)
 - **Node.js / NestJS / TypeScript**: REST API 및 WebSocket 서버 구축  
 - **Socket.io**: 실시간 양방향 통신  
 - **MySQL**: 관계형 데이터 모델링 및 영구 데이터 저장  
@@ -91,24 +92,28 @@
 - **JavaScript / Bootstrap**: 프론트 UI 구성 및 이벤트 처리
 
 <div align="center"> 
-<img height="30" src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
-<img height="30" src="https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white" />
-<img height="30" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-<img height="30" src="https://img.shields.io/badge/Socket.io-010101?style=flat-square&logo=socketdotio&logoColor=white" />
-<img height="30" src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
-<img height="30" src="https://img.shields.io/badge/Bootstrap-7952B3?style=flat-square&logo=bootstrap&logoColor=white" />
-<br/>
-<img height="30" src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white"/>
-<img height="30" src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" />
-<img height="30" src="https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white"/>
-<img height="30" src="https://img.shields.io/badge/GitHub-black?style=flat-square&logo=GitHub&logoColor=white"/>
+  <img height="30" src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/Socket.io-010101?style=flat-square&logo=socketdotio&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
+  <img height="30" src="https://img.shields.io/badge/Bootstrap-7952B3?style=flat-square&logo=bootstrap&logoColor=white" />
+  <br/>
+  <img height="30" src="https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white"/>
+  <img height="30" src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/Nginx-009639?style=flat-square&logo=nginx&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/Ubuntu-E95420?style=flat-square&logo=ubuntu&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white"/>
+  <img height="30" src="https://img.shields.io/badge/GitHub-black?style=flat-square&logo=GitHub&logoColor=white"/>
 </div>
 
 ---
 
 ## 아키텍처
 
-<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/b4d4118c-809d-452b-906e-bb8f65f1f91f" />
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/d6e7075a-03c2-46fb-aad7-85f6a63cc88d" />
+
+> App Server는 현재 단일 프로세스로 운영되며, 추후 PM2 Cluster를 이용한 병렬화와 Redis Pub/Sub 기반 확장을 통해 실시간 채팅 처리량 증가 및 안정성 강화를 계획하고 있습니다.
 
 ---
 
