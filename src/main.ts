@@ -5,7 +5,8 @@ import { join } from 'path';
 import * as express from 'express';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
-
+import { RedisService } from './redis/redis.service';
+import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,7 +18,9 @@ async function bootstrap() {
   });
   
   // 웹소켓 서버 설정
-  app.useWebSocketAdapter(new IoAdapter(app));
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // DTO 자동 검사
   app.useGlobalPipes(
@@ -38,20 +41,8 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // [ Nginx 적용으로 정적파일 제공 코드 X ]
-  // const server = app.getHttpAdapter().getInstance();
-  // const publicPath = join(__dirname, '..', 'public');
-  // const uploadPath = join(__dirname, '..', 'uploads');
-
-  // /uploads 경로는 서버 uploads 폴더와 매핑
-  // server.use('/uploads', express.static(uploadPath));
-
-  // /api 경로 요청은 서버로, 나머지는 프론트에 index.html 제공
-  // server.use(express.static(publicPath));
-  // server.get(/^(?!\/api).*$/, (req, res) => {
-  //   res.sendFile(join(publicPath, 'index.html'));
-  // });
-
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
+
+  console.log(`server is running 22 ${process.env.SOCKET_ORIGIN}`);
 }
 bootstrap();

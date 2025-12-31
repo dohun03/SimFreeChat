@@ -178,7 +178,11 @@ export async function renderChatRoom(container, user, roomId) {
     const roomEdit = document.getElementById('room-edit');
     const roomBanManager = document.getElementById('room-ban-manager');
 
-    socket = io({ withCredentials: true });
+    socket = io({
+      transports: ['websocket'],
+      withCredentials: true,
+    });
+
 
     if (isBanned) {
       showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banReason}`);
@@ -631,13 +635,13 @@ export async function renderChatRoom(container, user, roomId) {
     }
 
     // [새 채팅 메시지 출력 Event]
-    socket.on('messageCreated', data => {
+    socket.on('messageCreate', data => {
       if (lastMessageId == data.lastMessageId) {
         console.log('메시지 출력');
         const li = createMessageElement(data.message, user.id);
         messagesList.appendChild(li);
 
-        if (wasAtBottom) scrollWhenReady();
+        if (wasAtBottom) scrollToBottom();
 
         keepMessageLimit();
       } else {

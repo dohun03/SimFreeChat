@@ -44,7 +44,7 @@ import { Logger, QueryRunner } from 'typeorm';
         
             const tableName = tableMatch ? tableMatch[1] : 'unknown';
         
-            console.log(`[QUERY] ${tableName} (${time} ms)`);
+            // console.log(`[QUERY] ${tableName} (${time} ms)`);
           }
         
           logSchemaBuild() {}

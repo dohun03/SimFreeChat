@@ -30,4 +30,25 @@ export class MessagesController {
   ) {
     return this.messagesService.getMessagesByRoom(roomId, query);
   }
+
+  // TEST 메시지 전송
+  @UseGuards(SessionGuard)
+  @Post('/test')
+  async loadTestSendMessage(
+    @Req() req: any,
+    @Body() body: any,
+  ) {
+    const { roomId, content, type } = body;
+
+    if (!roomId || !content) {
+      throw new UnauthorizedException('roomId / content 누락');
+    }
+
+    return this.messagesService.createMessage(
+      Number(roomId),
+      req.user.userId,
+      content,
+      type ?? 'text',
+    );
+  }
 }

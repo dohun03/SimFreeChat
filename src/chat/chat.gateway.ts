@@ -28,9 +28,11 @@ import { BanUserDto } from './dto/ban-user.dto';
     origin: process.env.SOCKET_ORIGIN,
     credentials: true,
   },
+  transport: ['websocket'],
   pingInterval: 60000 * 1,  // 1분마다 ping
   pingTimeout: 60000 * 2,   // 2분 동안 pong 없으면 연결 끊음
 })
+
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -48,53 +50,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`[CONNECT] ${client.id} - ${client.handshake.address}`);
   }
 
-  handleDisconnect(client: Socket) {
-    // 자동으로 소켓 제거된 시점
+  async handleDisconnect(client: Socket) {
     console.log(`[DISCONNECT] ${client.id}`);
-    // userSockets에서 해당 소켓 제거
-    for (const [userId, socketMap] of this.userSockets.entries()) {
-      if (socketMap.has(client.id)) {
-        socketMap.delete(client.id);
-        if (socketMap.size === 0) {
-          this.userSockets.delete(userId);
-        }
-        break;
-      }
+    try {
+      const user = await this.getUserFromSession(client);
+      await this.redisService.hDelUserSocket(user.userId, client.id);
+    } catch (err) {
+      console.log(err);
     }
   }
 
-  // 소켓 추가 메서드
-  addUserSocket(userId: number, socketId: string, roomId: number) {
-    if (!this.userSockets.has(userId)) {
-      this.userSockets.set(userId, new Map());
-    }
-    this.userSockets.get(userId)!.set(socketId, roomId);
+  // 소켓 추가
+  async addUserSocket(userId: number, socketId: string, roomId: number) {
+    await this.redisService.hSetUserSocket(userId, socketId, roomId);
   }
 
-  // 강제 소켓 삭제 메서드
-  removeUserSocket(roomId: number, userId: number) {
-    const socketMap = this.userSockets.get(userId);
-    if (!socketMap) return;
+  // 강제 소켓 삭제 (강퇴/밴/로그아웃 등)
+  async removeUserSocket(roomId: number, userId: number) {
+    // 1. Redis: 이 유저의 소켓 ID, 방 ID 필드 가져옴
+    const socketMap = await this.redisService.hGetAllUserSockets(userId);
 
-    const deleteId: string[] = [];
-    
-    // socketMap을 순회하면서 맵의 roomId와 받아온 roomId 일치 여부 확인
-    // 소켓 아이디를 deleteId 배열에 저장
-    for (const [sId, rId] of socketMap.entries()) {
-      if (rId == roomId) {
-        deleteId.push(sId);
-      }
-    }
-
-    // deleteId 배열에 저장된 소켓 찾아서 끊기.
-    for (const sId of deleteId) {
-      const socket = this.server.sockets.sockets.get(sId);
-      if (socket) {
-        socket.emit('forcedDisconnect', {
-          msg: "채팅방과 연결이 끊겼습니다.",
-        });
-        socket.disconnect(true);
-        socketMap.delete(sId);
+    for (const [sId, rId] of Object.entries(socketMap)) {
+      if (Number(rId) === roomId) {
+        // 2. Redis Adapter: 모든 프로세스에서 소켓 ID를 찾아 연결 끊기
+        this.server.to(sId).emit('forcedDisconnect', { msg: "채팅방과 연결이 끊겼습니다." });
+        this.server.in(sId).disconnectSockets(true);
+        await this.redisService.hDelUserSocket(userId, sId);
       }
     }
   }
@@ -195,10 +176,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // EventEmitter 이벤트(@OnEvent) 방식
   @OnEvent('leaveAllRooms')
-  handleLeaveAllRooms(payload: { roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
-    const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
+  async handleLeaveAllRooms(payload: { userId: number, roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
+    const { userId, roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
-    this.removeUserSocket(roomId, deletedUser.id);
+    await this.removeUserSocket(roomId, deletedUser.id)
     
     this.server.to(roomId.toString()).emit('roomEvent', {
       msg: `${deletedUser.name} 님이 퇴장했습니다.`,
@@ -242,14 +223,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: any,
   ) {
+    // 유니크한 라벨을 생성 (성능 측정용)
+    const label = `ChatProcess-${client.id}-${Date.now()}`;
+    console.time(label); 
+
     try {
       const dto = await this.validateDto(SendMessageDto, payload);
       const user = await this.getUserFromSession(client);
+      
+      // 여기가 가장 유력한 병목 구간 (DB Insert)
       const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content, dto.type);
   
-      this.server.to(dto.roomId.toString()).emit('messageCreated', message);
+      this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
       console.error(err.message);
+    } finally {
+      // 성공하든 에러가 나든 시간 측정 종료
+      console.timeEnd(label);
     }
   }
 
