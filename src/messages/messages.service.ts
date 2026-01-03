@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
@@ -18,6 +18,7 @@ export class MessagesService {
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
@@ -42,8 +43,15 @@ export class MessagesService {
   ): Promise<{ message: ResponseMessageDto; lastMessageId?: number }> {
     try {
       const [room, user] = await Promise.all([
-        this.roomRepository.findOne({ where: { id: roomId } }),
-        this.userRepository.findOne({ where: { id: userId } }),
+        this.roomRepository.findOne({ 
+          where: { id: roomId },
+          select: ['id', 'name'],
+          relations: ['owner']
+        }),
+        this.userRepository.findOne({ 
+          where: { id: userId },
+          select: ['id', 'name']
+        }),
       ]);
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
 
@@ -52,70 +60,72 @@ export class MessagesService {
         where: { room: { id: roomId } },
         order: { id: 'DESC' },
       });
-  
-      const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
 
-      const newMessage = this.messageRepository.create({
-        room,
-        user,
+      const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
+      const messageAction = 'SEND';
+
+      const msg = this.messageRepository.create({
+        room: { id: roomId },
+        user: { id: userId },
         content,
         type: messageType
       });
-      const message = await this.messageRepository.save(newMessage);
-  
-      const newMessageLog = this.messageLogRepository.create({
+      const savedMsg = await this.messageRepository.save(msg);
+
+      // 로그 저장은 병렬로 처리 (속도 이슈)
+      this.messageLogRepository.insert({
         roomId: room.id,
         roomName: room.name,
-        roomOwnerId: room.owner.id,
+        roomOwnerId: room.owner?.id,
         userId: user.id,
         userName: user.name,
-        messageId: message.id,
-        messageContent: message.content,
-        action: 'SEND',
-        type: messageType
-      });
-      await this.messageLogRepository.save(newMessageLog);
-      
-      const { password, ...safeUser } = user;
+        messageId: savedMsg.id,
+        messageContent: savedMsg.content,
+        type: messageType,
+        action: messageAction,
+      }).catch(err => console.error('로그 저장 실패:', err));
+
       return {
-        message: { ...message, user: safeUser },
+        message: { ...savedMsg, user },
         lastMessageId: lastMessage?.id,
       };
     } catch (err) {
       console.error('메시지 생성 중 에러:', err);
+      if (err instanceof NotFoundException) throw err;
       throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
     }
   }
 
   async deleteMessage(roomId: number, userId: number, messageId: number): Promise<number> {
     try {
-      const message = await this.messageRepository.findOne({
-        where: {
-          id: messageId,
-          room: { id: roomId },
-          user: { id: userId },
+      return await this.dataSource.transaction(async (manager) => {
+        const message = await manager.findOne(Message, {
+          where: {
+            id: messageId,
+            room: { id: roomId },
+            user: { id: userId },
+          },
+          relations: ['room', 'room.owner', 'user'],
+        });
+        if (!message || message.isDeleted) {
+          throw new BadRequestException('메시지를 삭제할 수 없습니다.');
         }
+
+        await manager.update(Message, messageId, { isDeleted: true });
+        await manager.insert(MessageLog, {
+          roomId: message.room.id,
+          roomName: message.room.name,
+          roomOwnerId: message.room.owner?.id,
+          userId: message.user.id,
+          userName: message.user.name,
+          messageId: message.id,
+          messageContent: message.content,
+          type: message.type,
+          action: 'DELETE'
+        });
+
+        return message.id;
       });
-      if (!message || message.isDeleted) throw new BadRequestException('메시지를 삭제할 수 없습니다.');
-  
-      message.isDeleted = true;
-
-      await this.messageRepository.save(message);
-
-      const deletedMessageLog = this.messageLogRepository.create({
-        roomId: message.room.id,
-        roomName: message.room.name,
-        roomOwnerId: message.room.owner.id,
-        userId: message.user.id,
-        userName: message.user.name,
-        messageId: message.id,
-        messageContent: message.content,
-        type: message.type,
-        action: 'DELETE'
-      });
-      await this.messageLogRepository.save(deletedMessageLog);
-
-      return message.id;
     } catch (err) {
       console.error('메시지 삭제 실패:', err);
       throw new InternalServerErrorException('서버에서 메시지 삭제 중 오류가 발생했습니다.');
