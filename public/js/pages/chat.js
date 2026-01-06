@@ -2,7 +2,8 @@ import { escapeHtml, formatDate, router } from '../app.js'
 
 let socket = null;
 let currentRoomId = null;
-let lastMessageId = null; // 마지막 메시지 비교 전역변수
+let serverLastMessageId;
+let loading = false;
 
 function closeSocketConnection() {
   if (socket) {
@@ -22,6 +23,11 @@ export async function renderChatRoom(container, user, roomId) {
 
   roomId = Number(roomId);
   currentRoomId = roomId;
+
+  socket = io({
+    transports: ['websocket'],
+    withCredentials: true,
+  });
 
   try {
     // 방 정보 조회
@@ -177,12 +183,6 @@ export async function renderChatRoom(container, user, roomId) {
     const chatSearchDown = document.getElementById('search-down');
     const roomEdit = document.getElementById('room-edit');
     const roomBanManager = document.getElementById('room-ban-manager');
-
-    socket = io({
-      transports: ['websocket'],
-      withCredentials: true,
-    });
-
 
     if (isBanned) {
       showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banReason}`);
@@ -425,150 +425,126 @@ export async function renderChatRoom(container, user, roomId) {
     // 메시지 최댓값 유지
     function keepMessageLimit(direction = 'recent') {
       if (!messagesList) return;
-    
-      const max = 300;
-      const trimTo = 200;
-    
+
+      const limit = 100;
       const currentLength = messagesList.children.length;
-    
-      if (currentLength > max) {
-        const removeCount = currentLength - trimTo;
-    
+
+      // 메시지가 최댓값보다 많을 경우 삭제
+      console.log(currentLength);
+      if (currentLength > limit) {
+        const removeCount = currentLength - limit;
+
         for (let i = 0; i < removeCount; i++) {
           if (direction === 'before') {
-            // 더보기(과거 메시지 prepend) → 아래(최신)부터 제거
             messagesList.removeChild(messagesList.lastElementChild);
           } else {
-            // 새 메시지 append → 위(오래된 메시지)부터 제거
             messagesList.removeChild(messagesList.firstElementChild);
           }
         }
       }
-
-      lastMessageId = messagesList.lastElementChild?.dataset.id;
-    }
-
-    // 메시지 로딩 표시
-    function showLoading() {
-      loadingIndicator.style.display = 'block';
-    }
-
-    function hideLoading() {
-      loadingIndicator.style.display = 'none';
     }
 
     // 메시지 로드 (API 요청)
-    async function loadMessages(direction) {
-      showLoading();
-      
-      let query = '';
-      let cursorId = '';
+    async function loadMessages(direction = 'init') {
+      if (loading) return;
+      loading = true;
 
-      if (direction === 'before') {
-        cursorId = messagesList.firstElementChild?.dataset.id;
-        query = `?direction=${direction}&cursor=${cursorId}`;
-      } 
-      else if (direction === 'recent') {
-        cursorId = messagesList.lastElementChild?.dataset.id;
-        query = `?direction=${direction}&cursor=${cursorId}`;
+      const topMessageBeforeLoading = messagesList.firstElementChild;
+
+      if (loadingIndicator) loadingIndicator.style.display = 'block';
+
+      let url = `/api/messages/${roomId}`;
+      const firstId = messagesList.firstElementChild?.dataset.id;
+      const lastId = messagesList.lastElementChild?.dataset.id;
+
+      if (direction === 'before' && firstId) {
+        url += `?direction=before&cursor=${firstId}`;
+      } else if (direction === 'recent' && lastId) {
+        url += `?direction=recent&cursor=${lastId}`;
       }
-    
+
       try {
-        const res = await fetch(`/api/messages/${roomId}${query}`);
-        if (!res.ok) throw new Error('메시지를 불러오는 중 오류 발생');
-    
-        let messages = await res.json();
-        if (messages.length === 0) {
-          console.log('더 이상 메시지가 없습니다.');
-          return;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Network response was not ok');
+        const messages = await res.json();
+
+        if (!messages || messages.length === 0) {
+          showSystemMessage('메시지가 더 이상 없습니다.');
+          return; 
         }
 
-        if (direction !== 'recent') messages = messages.reverse();
-    
         const fragment = document.createDocumentFragment();
-        messages.forEach(msg => {
-          const li = createMessageElement(msg, user.id);
-          fragment.appendChild(li);
+        [...messages].reverse().forEach(msg => {
+          fragment.appendChild(createMessageElement(msg, user.id));
         });
-    
+
         if (direction === 'before') {
           messagesList.prepend(fragment);
+          keepMessageLimit('before');
+          // 스크롤 위치 고정
+          if (topMessageBeforeLoading) {
+            topMessageBeforeLoading.scrollIntoView({ block: 'start' });
+          }
         }
         else if (direction === 'recent') {
-          messagesList.append(fragment);
+          messagesList.appendChild(fragment);
+          keepMessageLimit('recent');
         }
         else {
-          messagesList.append(fragment);
+          messagesList.innerHTML = '';
+          messagesList.appendChild(fragment);
           scrollWhenReady();
         }
 
-        keepMessageLimit(direction);
-
       } catch (err) {
-        showSystemMessage(err.message);
+        console.error('메시지 로딩 실패:', err);
+        showSystemMessage('메시지 로딩 실패');
       } finally {
-        hideLoading();
+        loading = false;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
       }
     }
-    loadMessages();
+    loadMessages('init');
 
     // 메시지 로드 (스크롤 이벤트)
-    function isAtBottom(scrollGap = 50) {
-      return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - scrollGap;
-    }
-
     function isAtTop(scrollGap = 50) {
       return chatMessages.scrollTop <= scrollGap;
     }
 
-    let loading = false;
-    let lastScrollTop = 0;
-    
-    let wasAtBottom = false;
-    let wasAtTop = false;
-    
-    chatMessages.addEventListener('scroll', async () => {
-      if (loading) return;
-    
-      const currentScrollTop = chatMessages.scrollTop;
-      const isScrollingDown = currentScrollTop > lastScrollTop;
-      const isScrollingUp = currentScrollTop < lastScrollTop;
-      lastScrollTop = currentScrollTop;
-    
-      const atBottom = isAtBottom();
-      const atTop = isAtTop();
-    
-      // 최하단 도달
-      if (!wasAtBottom && atBottom && isScrollingDown) {
-        loading = true;
+    function isAtBottom(scrollGap = 50) {
+      return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - scrollGap;
+    }
 
-        await loadMessages('recent');
+    let isAlreadyAtBottom = false;
+    let isAlreadyAtTop = false;
 
-        loading = false;
+    chatMessages.addEventListener('scroll', () => {
+      const atTop = isAtTop(5);
+
+      if (atTop) {
+        if (!isAlreadyAtTop && !loading) {
+          console.log('상단 도달 - 과거 메시지 로딩');
+          loadMessages('before');
+          isAlreadyAtTop = true;
+        }
+      } else {
+        isAlreadyAtTop = false;
       }
 
-      // 최상단 도달
-      if (!wasAtTop && atTop && isScrollingUp) {
-        loading = true;
-        // 최상단 메시지 ID 저장
-        const firstMessageId = messagesList.firstElementChild?.dataset.id;
+      // 2. 바닥(Bottom) 체크
+      const atBottom = isAtBottom(20);
 
-        await loadMessages('before');
-
-        // 그 메시지를 다시 찾아서 위치 고정
-        if (firstMessageId) {
-          const sameMessage = messagesList.querySelector(`[data-id="${firstMessageId}"]`);
-          if (sameMessage) {
-            sameMessage.scrollIntoView();
-          }
+      if (atBottom) {
+        if (!isAlreadyAtBottom) {
+          console.log('바닥 도달 - 최신 메시지 로딩');
+          hideNewMessageAlert();
+          loadMessages('recent');
+          isAlreadyAtBottom = true;
         }
-      
-        loading = false;
-      }      
-    
-      // 상태 업데이트
-      wasAtBottom = atBottom;
-      wasAtTop = atTop;
+      } else {
+        // 바닥에서 위로 올라가면 다시 잠금 해제
+        isAlreadyAtBottom = false;
+      }
     });
 
     // 이미지 모두 로딩 후 스크롤
@@ -611,8 +587,11 @@ export async function renderChatRoom(container, user, roomId) {
       newMessageAlert.classList.add('d-none');
     }
 
-    newMessageAlert.addEventListener('click', () => {
-      loadMessages();
+    newMessageAlert.addEventListener('click', async () => {
+      messagesList.innerHTML = ''; 
+      await loadMessages('init');
+      
+      scrollToBottom();
       hideNewMessageAlert();
     });
 
@@ -636,18 +615,30 @@ export async function renderChatRoom(container, user, roomId) {
 
     // [새 채팅 메시지 출력 Event]
     socket.on('messageCreate', data => {
-      if (lastMessageId == data.lastMessageId) {
-        console.log('메시지 출력');
-        const li = createMessageElement(data.message, user.id);
-        messagesList.appendChild(li);
+      const { message, lastMessageId } = data;
+      const myLastMessageId = messagesList.lastElementChild?.dataset.id || "0";
 
-        if (wasAtBottom) scrollToBottom();
+      const hasScroll = chatMessages.scrollHeight > chatMessages.clientHeight;
+      const isMine = message.user.id === user.id;
+
+      // 최신 
+      if (!hasScroll || isMine || (isAtBottom(100) && myLastMessageId == lastMessageId)) {
+        const li = createMessageElement(message, user.id);
+        messagesList.appendChild(li);
+        
+        if (message.type === 'image') {
+          scrollWhenReady();
+        } else {
+          scrollToBottom();
+        }
 
         keepMessageLimit();
+
       } else {
-        console.log('알림 띄우기');
         showNewMessageAlert();
       }
+
+      serverLastMessageId = lastMessageId;
     });
 
     // 메시지 입력 칸 높이 조절
