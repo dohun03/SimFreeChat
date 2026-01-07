@@ -13,9 +13,11 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RoomUsersModule } from './room-users/room-users.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { Logger, QueryRunner } from 'typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true, // 전역에서 사용 가능
     }),
@@ -30,31 +32,18 @@ import { Logger, QueryRunner } from 'typeorm';
         database: config.get<string>('DB_NAME'),
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
-        logging: true,
-        maxQueryExecutionTime: 1,
-        logger: new class implements Logger {
-          logQuery() {}
-          logQueryError() {}
-          
-          logQuerySlow(time: number, query: string) {
-            const tableMatch =
-              query.match(/from\s+`?(\w+)`?/i) ||
-              query.match(/into\s+`?(\w+)`?/i) ||
-              query.match(/update\s+`?(\w+)`?/i);
-        
-            const tableName = tableMatch ? tableMatch[1] : 'unknown';
-        
-            // console.log(`[QUERY] ${tableName} (${time} ms)`);
-          }
-        
-          logSchemaBuild() {}
-          logMigration() {}
-          log() {}
-        }
+        logging: ['error', 'warn'],
+        maxQueryExecutionTime: 100,
+        logger: 'advanced-console',
+        extra: {
+          connectionLimit: 10,
+          waitForConnections: true,
+          queueLimit: 0,
+          connectTimeout: 10000,
+        },
       }),
       inject: [ConfigService],
     }),
-
     EventEmitterModule.forRoot(),
     UsersModule,
     RoomsModule,

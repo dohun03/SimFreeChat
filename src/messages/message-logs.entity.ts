@@ -35,7 +35,7 @@ export class MessageLog {
   userName: string;
 
   @Column({ name: 'message_id' })
-  messageId: number;
+  messageId: string;
 
   @Column({ name: 'message_content', type: 'text', nullable: true })
   messageContent: string;

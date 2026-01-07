@@ -31,7 +31,10 @@ export class ChatService {
   }
 
   async joinRoom(roomId: number, userId: number, password?: string): Promise<JoinRoomResult> {
-    const room = await this.roomRepository.findOne({ where: { id: roomId } });
+    const room = await this.roomRepository.findOne({
+      where: { id: roomId },
+      relations: ['owner'],
+    });
     if (!room) throw new BadRequestException('존재하지 않는 방입니다.');
 
     const beforeCount = await this.redisService.getRoomUserCount(roomId);
@@ -90,7 +93,7 @@ export class ChatService {
 
     await Promise.all(
       roomKeys.map(async (key) => {
-        const roomId = Number(key.split(':')[1]);
+        const roomId = Number(key.split(':')[2]);
         const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
         if (!isUserInRoom) {
           console.log(`${roomId}번 방에는 ${leaveUser.name}님이 존재하지 않습니다.`);
@@ -131,7 +134,8 @@ export class ChatService {
       where: {
         id: roomId,
         owner: owner.userId
-      }
+      },
+      relations: ['owner'],
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
     if (room.owner.id!==owner.userId) throw new UnauthorizedException('권한이 없습니다.');

@@ -24,9 +24,9 @@ export class RoomUsersService {
       where: {
         id: roomId,
         owner: { id: owner.userId }
-      }
+      },
+      relations: ['owner'],
     });
-    console.log(room);
     if (!room) throw new UnauthorizedException('방장만 수행할 수 있습니다.');
     if (room.owner.id === userId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
 
@@ -52,8 +52,8 @@ export class RoomUsersService {
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
-        owner: { id: ownerId }
-      }
+        owner: { id: ownerId },
+      },
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
 

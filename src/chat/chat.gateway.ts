@@ -52,11 +52,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleDisconnect(client: Socket) {
     console.log(`[DISCONNECT] ${client.id}`);
-    try {
-      const user = await this.getUserFromSession(client);
-      await this.redisService.hDelUserSocket(user.userId, client.id);
-    } catch (err) {
-      console.log(err);
+
+    const userId = client.data.userId;
+    if (userId) {
+      console.log(`[DISCONNECT] 유저 ${userId}의 소켓 ${client.id} 정리 중...`);
+      await this.redisService.hDelUserSocket(userId, client.id);
     }
   }
 
@@ -115,7 +115,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return dto;
   }
   
-  // WebSocket 이벤트(@SubscribeMessage) 방식
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(
     @ConnectedSocket() client: Socket,
@@ -124,12 +123,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const dto = await this.validateDto(JoinRoomDto, payload);
       const user = await this.getUserFromSession(client);
+      client.data.userId = user.userId;
+
       const { roomId, password } = dto;
       const { roomUsers, afterCount, joinUser } = await this.chatService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
-      this.removeUserSocket(roomId, user.userId);
-      this.addUserSocket(user.userId, client.id, roomId);
+      await this.removeUserSocket(roomId, user.userId);
+      await this.addUserSocket(user.userId, client.id, roomId);
       client.join(roomId.toString());
   
       // 방 전체에 입장 메시지 전송
@@ -174,12 +175,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // EventEmitter 이벤트(@OnEvent) 방식
   @OnEvent('leaveAllRooms')
   async handleLeaveAllRooms(payload: { userId: number, roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
     const { userId, roomId, roomUserCount, roomUsers, deletedUser } = payload;
     
-    await this.removeUserSocket(roomId, deletedUser.id)
+    await this.removeUserSocket(roomId, deletedUser.id);
     
     this.server.to(roomId.toString()).emit('roomEvent', {
       msg: `${deletedUser.name} 님이 퇴장했습니다.`,
@@ -197,25 +197,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       room,
     });
   }
-
+  
   @OnEvent('deleteRoom')
   handleDeleteRoom(payload: { roomId: number, userId: number }) {
     const { roomId, userId } = payload;
-    const userSocket = this.userSockets.get(userId);
-    if (!userSocket) {
-      console.log('소켓 아이디가 없습니다.');
-      return;
-    }
-    const [socketId] = userSocket.keys();
-
     this.removeUserSocket(roomId, userId);
-
-    // 특정 사용자에게만 메시지 전송
-    this.server.to(socketId).emit('roomEvent', {
-      msg: '방이 삭제되었습니다.',
-      roomUsers: [],
-      roomUserCount: 0,
-    });
   }
 
   @SubscribeMessage('sendMessage')
@@ -223,23 +209,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: any,
   ) {
-    // 유니크한 라벨을 생성 (성능 측정용)
-    const label = `ChatProcess-${client.id}-${Date.now()}`;
-    console.time(label); 
-
     try {
       const dto = await this.validateDto(SendMessageDto, payload);
       const user = await this.getUserFromSession(client);
       
-      // 여기가 가장 유력한 병목 구간 (DB Insert)
       const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content, dto.type);
   
       this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
-      console.error(err.message);
-    } finally {
-      // 성공하든 에러가 나든 시간 측정 종료
-      console.timeEnd(label);
+      console.error(err);
     }
   }
 
@@ -273,7 +251,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
 
-      this.removeUserSocket(dto.roomId, dto.userId);
+      await this.removeUserSocket(dto.roomId, dto.userId);
 
       this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${kickedUser.name} 님을 퇴장시켰습니다.`,
@@ -298,7 +276,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
 
-      this.removeUserSocket(dto.roomId, dto.userId);
+      await this.removeUserSocket(dto.roomId, dto.userId);
 
       this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${kickedUser.name} 님을 밴했습니다.`,

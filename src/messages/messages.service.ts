@@ -6,6 +6,8 @@ import { Repository, DataSource } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
+import { RedisService } from 'src/redis/redis.service';
+import { Snowflake } from 'node-snowflake';
 
 @Injectable()
 export class MessagesService {
@@ -19,6 +21,7 @@ export class MessagesService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly redisService: RedisService,
   ) {}
 
   private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
@@ -40,7 +43,7 @@ export class MessagesService {
     userId: number,
     content: string,
     type: string
-  ): Promise<{ message: ResponseMessageDto; lastMessageId?: number }> {
+  ): Promise<{ message: ResponseMessageDto; lastMessageId?: string }> {
     try {
       const [room, user] = await Promise.all([
         this.roomRepository.findOne({ 
@@ -50,44 +53,59 @@ export class MessagesService {
         }),
         this.userRepository.findOne({ 
           where: { id: userId },
-          select: ['id', 'name']
+          select: ['id', 'name', 'isAdmin', 'isBanned', 'createdAt', 'updatedAt']
         }),
       ]);
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
 
-      const lastMessage = await this.messageRepository.findOne({
-        select: ['id'],
-        where: { room: { id: roomId } },
-        order: { id: 'DESC' },
-      });
+      const lastMessageId = await this.redisService.getLastMessageId(roomId);
 
+      const messageId = Snowflake.nextId();
       const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
       const messageAction = 'SEND';
 
-      const msg = this.messageRepository.create({
-        room: { id: roomId },
-        user: { id: userId },
-        content,
-        type: messageType
-      });
-      const savedMsg = await this.messageRepository.save(msg);
+      const message = {
+        id: messageId,
+        room: {
+          id: room.id,
+          name: room.name,
+          owner: {
+            id: room.owner.id,
+          }
+        },
+        user: {
+          id: user.id,
+          name: user.name,
+          isAdmin: user.isAdmin,
+          isBanned: user.isBanned,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        content: content,
+        type: messageType,
+        isDeleted: false,
+        createdAt: new Date(),
+        updatedAt: null,
+      };
 
-      // 로그 저장은 병렬로 처리 (속도 이슈)
-      this.messageLogRepository.insert({
+      const messageLog = {
         roomId: room.id,
         roomName: room.name,
         roomOwnerId: room.owner?.id,
         userId: user.id,
         userName: user.name,
-        messageId: savedMsg.id,
-        messageContent: savedMsg.content,
-        type: messageType,
+        messageId: message.id,
+        messageContent: message.content,
+        type: message.type,
         action: messageAction,
-      }).catch(err => console.error('로그 저장 실패:', err));
+        createdAt: message.createdAt,
+      }
+
+      await this.redisService.pushMessageAndLog(message, messageLog);
 
       return {
-        message: { ...savedMsg, user },
-        lastMessageId: lastMessage?.id,
+        message: { ...message, user },
+        lastMessageId,
       };
     } catch (err) {
       console.error('메시지 생성 중 에러:', err);
@@ -96,19 +114,20 @@ export class MessagesService {
     }
   }
 
-  async deleteMessage(roomId: number, userId: number, messageId: number): Promise<number> {
-    try {
-      return await this.dataSource.transaction(async (manager) => {
-        const message = await manager.findOne(Message, {
-          where: {
-            id: messageId,
-            room: { id: roomId },
-            user: { id: userId },
-          },
-          relations: ['room', 'room.owner', 'user'],
-        });
-        if (!message || message.isDeleted) {
-          throw new BadRequestException('메시지를 삭제할 수 없습니다.');
+  async deleteMessage(roomId: number, userId: number, messageId: string): Promise<string> {
+    // 어디에 있던 캐시 메시지는 삭제.
+    await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
+
+    const message = await this.messageRepository.findOne({
+      where: { id: messageId, room: { id: roomId }, user: { id: userId } },
+      relations: ['room', 'room.owner', 'user'],
+    });
+
+    // DB에 메시지가 있음.
+    if (message) {
+      await this.dataSource.transaction(async (manager) => {
+        if (message.isDeleted) {
+          throw new BadRequestException('이미 삭제된 메시지입니다.');
         }
 
         await manager.update(Message, messageId, { isDeleted: true });
@@ -121,57 +140,49 @@ export class MessagesService {
           messageId: message.id,
           messageContent: message.content,
           type: message.type,
-          action: 'DELETE'
+          action: 'DELETE',
+          createdAt: new Date(),
         });
-
-        return message.id;
       });
-    } catch (err) {
-      console.error('메시지 삭제 실패:', err);
-      throw new InternalServerErrorException('서버에서 메시지 삭제 중 오류가 발생했습니다.');
+    } else {
+      await this.redisService.deleteMessageAndLog(roomId, userId, messageId);
     }
+    console.log(`메시지 삭제 완료: ${messageId}`);
+    return messageId;
   }
-
+  
   async getMessagesByRoom(roomId: number, query: any): Promise<ResponseMessageDto[]> {
-    const { search, cursor, direction } = query;
-    const parsedCursor = cursor ? Number(cursor) : null;
+    const { cursor, direction } = query;
+    const limit = 100;
 
     const qb = this.messageRepository
-    .createQueryBuilder('m')
-    .leftJoinAndSelect('m.user', 'u')
-    .where('m.room_id = :roomId', { roomId })
+      .createQueryBuilder('m')
+      .leftJoinAndSelect('m.user', 'u')
+      .where('m.room_id = :roomId', { roomId });
 
-    // 검색 조회
-    if (search) {
-      qb.andWhere(parsedCursor ? 'm.id >= :cursor' : '1=1', { cursor: parsedCursor })
-      .andWhere('m.type = :type', { type: 'text' })
-      .andWhere('m.content LIKE :search', { search: `%${search}%` })
-      .orderBy('m.id', 'DESC');
+    // DB 메시지 반환
+    if (cursor) {
+      if (direction === 'before') {
+        qb.andWhere('m.id < :cursor', { cursor }).orderBy('m.id', 'DESC');
+      }
+      else if (direction === 'recent') {
+        qb.andWhere('m.id > :cursor', { cursor }).orderBy('m.id', 'ASC');
+      }
     }
-    // 일반 조회
+    // 캐시 메시지 반환
     else {
-      qb.limit(100);
-
-      if (parsedCursor && direction === 'before') {
-        qb.andWhere('m.id < :cursor', { cursor: parsedCursor })
-        .orderBy('m.id', 'DESC');
-      } else if (parsedCursor && direction === 'recent') {
-        qb.andWhere('m.id > :cursor', { cursor: parsedCursor })
-        .orderBy('m.id', 'ASC');
-      } else {
-        qb.orderBy('m.id', 'DESC');
-      }
+      const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
+      if (cachedMessages.length > 0) return cachedMessages;
     }
 
-    const messages = await qb.getMany();
-
-    return messages.map((msg) => {
+    const messages = await qb.limit(limit).getMany();
+    
+    const result = messages.map((msg) => {
       const { password, ...safeUser } = msg.user;
-      return {
-        ...msg,
-        user: safeUser
-      }
+      return { ...msg, user: safeUser };
     });
+
+    return direction === 'recent' ? result.reverse() : result;
   }
   
   async getAllMessageLogs(

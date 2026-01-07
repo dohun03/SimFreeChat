@@ -7,11 +7,11 @@ export class RoomUser {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Room, { onDelete: 'CASCADE', eager: true })
+  @ManyToOne(() => Room, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'room_id' })
   room: Room;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE', eager: true })
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 

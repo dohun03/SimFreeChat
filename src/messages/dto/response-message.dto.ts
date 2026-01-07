@@ -1,10 +1,10 @@
 export class ResponseMessageDto {
-  id: number;
+  id: string;
   content: string;
   type: string;
   isDeleted: boolean;
   createdAt: Date;
-  updatedAt: Date;
+  updatedAt: Date | null;
   user: {
     id: number;
     name: string;

@@ -469,7 +469,7 @@ export async function renderChatRoom(container, user, roomId) {
         const messages = await res.json();
 
         if (!messages || messages.length === 0) {
-          showSystemMessage('메시지가 더 이상 없습니다.');
+          console.log('메시지가 더 이상 없습니다.');
           return; 
         }
 
@@ -669,7 +669,7 @@ export async function renderChatRoom(container, user, roomId) {
       if (!deleteBtn) return;
     
       const messageItem = deleteBtn.closest('.chat-message');
-      const messageId = Number(messageItem.dataset.id);
+      const messageId = messageItem.dataset.id;
     
       if (confirm('이 메시지를 삭제하시겠습니까?')) {
         socket.emit('deleteMessage', { roomId, messageId }, (res) => {

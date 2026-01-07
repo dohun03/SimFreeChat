@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, Index, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, Index, JoinColumn, PrimaryColumn } from 'typeorm';
 import { Room } from '../rooms/rooms.entity';
 import { User } from '../users/users.entity';
 
@@ -8,15 +8,18 @@ export enum MessageType {
 }
 
 @Entity()
+@Index('idx_master_room', ['room', 'id'])
 export class Message {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn({
+    type: 'bigint',
+  })
+  id: string;
 
-  @ManyToOne(() => Room, { onDelete: 'CASCADE', eager: true })
+  @ManyToOne(() => Room, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'room_id' })
   room: Room;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE', eager: true })
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
@@ -36,6 +39,11 @@ export class Message {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @Column({ 
+    name: 'updated_at',
+    type: 'timestamp',
+    nullable: true,
+    default: null
+  })
   updatedAt: Date;
 }

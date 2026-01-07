@@ -81,16 +81,10 @@ export class RoomsService {
   // 방 삭제
   async deleteRoom(roomId: number, userId: number): Promise<void> {
     try {
-      const owner = await this.userRepository.findOne({
-        where: { id: userId }
-      });
-      if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
-
       const result = await this.roomRepository.delete({
         id: roomId,
-        owner,
+        owner: { id: userId }
       });
-  
       if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
     } catch (err) {
       console.error('DB 삭제 에러:', err);
@@ -108,8 +102,21 @@ export class RoomsService {
       }
   
       const rooms = await this.roomRepository.find({
-        where: where,
+        where,
         order: { createdAt: 'DESC' },
+        relations: ['owner'],
+        select: {
+          id: true,
+          name: true,
+          maxMembers: true,
+          password: true,
+          createdAt: true,
+          updatedAt: true,
+          owner: {
+            id: true,
+            name: true,
+          }
+        }
       });
 
       return await Promise.all(
@@ -138,7 +145,10 @@ export class RoomsService {
 
   // 방 하나 조회
   async getRoomById(roomId: number): Promise<RoomResponseDto> {
-    const room = await this.roomRepository.findOne({ where: { id: roomId } });
+    const room = await this.roomRepository.findOne({
+      where: { id: roomId },
+      relations: ['owner'],
+    });
     if (!room) throw new NotFoundException('존재하지 않는 방입니다.');
 
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
