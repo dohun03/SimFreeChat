@@ -116,16 +116,6 @@ export class SocketService {
     this.socketEvents.updateRoom(roomId, room);
   }
 
-  async deleteRoom(roomId: number): Promise<void> {
-    const roomUsersArray = await this.redisService.getRoomUsers(roomId);
-    await this.redisService.deleteRoom(roomId);
-    await Promise.all(
-      roomUsersArray.map(userId => {
-        this.socketEvents.deleteRoom(roomId, Number(userId));
-      })
-    );
-  }
-
   async kickUser(roomId: number, userId: number, owner: any): Promise<KickUserResult> {
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');

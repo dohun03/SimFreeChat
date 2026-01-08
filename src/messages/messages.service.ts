@@ -314,7 +314,7 @@ export class MessagesService {
 
       let totalCount: number;
 
-      // 3. 캐시 존재 + 쿼리 조건 일치하는지 확인
+      // 쿼리 조건 일치하는지 확인
       if (cachedData && cachedData.queryStr === currentQueryStr) {
         totalCount = cachedData.totalCount;
         console.log('DB Count를 스킵');

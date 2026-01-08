@@ -53,7 +53,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const userId = client.data.userId;
     if (userId) {
-      console.log(`[DISCONNECT] 유저 ${userId}의 소켓 ${client.id} 정리 중...`);
+      console.log(`[DISCONNECT] 유저 ${userId}의 소켓 ${client.id} 정리`);
       await this.redisService.hDelUserSocket(userId, client.id);
     }
   }

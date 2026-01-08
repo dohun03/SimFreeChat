@@ -24,6 +24,6 @@ import { RoomUser } from 'src/room-users/room-user.entity';
     SocketEvents,
     SocketService,
   ],
-  exports: [SocketService]
+  exports: [SocketService, SocketEvents]
 })
 export class SocketModule {}

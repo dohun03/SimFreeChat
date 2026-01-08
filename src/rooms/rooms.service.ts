@@ -8,6 +8,7 @@ import { Room } from './rooms.entity';
 import * as bcrypt from 'bcrypt';
 import { RoomResponseDto } from './dto/response-room.dto';
 import { User } from 'src/users/users.entity';
+import { SocketEvents } from 'src/socket/socket.events';
 
 @Injectable()
 export class RoomsService {
@@ -17,6 +18,7 @@ export class RoomsService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private readonly redisService: RedisService,
+    private readonly socketEvents: SocketEvents,
   ) {}
 
   // 방 생성
@@ -86,6 +88,19 @@ export class RoomsService {
         owner: { id: userId }
       });
       if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+
+
+      const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+
+      await this.redisService.deleteRoom(roomId);
+      await this.redisService.deleteAllBufferMessagesByRoom(roomId);
+      await this.redisService.deleteAllCacheMessagesByRoom(roomId);
+
+      await Promise.all(
+        roomUsersArray.map(userId => {
+          this.socketEvents.deleteRoom(roomId, Number(userId));
+        })
+      );
     } catch (err) {
       console.error('DB 삭제 에러:', err);
       throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');

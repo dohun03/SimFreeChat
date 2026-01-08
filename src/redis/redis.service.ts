@@ -79,7 +79,7 @@ export class RedisService implements OnModuleInit {
   }
 
   // 3. 소켓 세션 관리 (Hash 구조 사용)
-  // key: user:sockets:userId { field: socketId, value: roomId }
+  // user:sockets:userId { field: socketId, value: roomId }
   async hSetUserSocket(userId: number, socketId: string, roomId: number) {
     const key = `user:sockets:${userId}`;
     await this.redis.hset(key, socketId, roomId);
@@ -102,6 +102,48 @@ export class RedisService implements OnModuleInit {
     const key = `room:messages:${roomId}`;
     const messages = await this.redis.lrange(key, 0, -1);
     return messages.map((msg) => JSON.parse(msg));
+  }
+
+  // [방별 캐시 메시지의 마지막 ID 조회]
+  async getLastMessageId(roomId: number): Promise<string | undefined> {
+    const key = `room:messages:${roomId}`;
+    const latest = await this.redis.lindex(key, 0);
+    if (!latest) return undefined;
+    try {
+      return JSON.parse(latest).id;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // [방별 캐시 메시지 삭제]
+  async deleteAllCacheMessagesByRoom(roomId: number) {
+    await this.redis.del(`room:messages:${roomId}`);
+  }
+
+  // [방별 버퍼 메시지 삭제]
+  async deleteAllBufferMessagesByRoom(roomId: number) {
+    const key = 'buffer:messages';
+
+    const items = await this.redis.lrange(key, 0, -1);
+    if (items.length === 0) return;
+
+    const filteredItems = items.filter((item) => {
+      try {
+        const parsed = JSON.parse(item);
+        return Number(parsed.room?.id) !== roomId;
+      } catch {
+        return true; 
+      }
+    });
+
+    if (items.length !== filteredItems.length) {
+      await this.redis.del(key);
+      if (filteredItems.length > 0) {
+        await this.redis.rpush(key, ...filteredItems);
+      }
+      console.log(`[Redis] ${key}에서 방 ${roomId}의 대기 메시지 ${items.length - filteredItems.length}건을 정리했습니다.`);
+    }
   }
 
   // [방 별 캐시 메시지 삭제]
@@ -127,18 +169,6 @@ export class RedisService implements OnModuleInit {
     console.log(`캐시에서 ${messageId} 메시지를 삭제했습니다.`);
 
     return true;
-  }
-
-  // [방별 캐시 메시지의 마지막 ID 조회]
-  async getLastMessageId(roomId: number): Promise<string | undefined> {
-    const key = `room:messages:${roomId}`;
-    const latest = await this.redis.lindex(key, 0);
-    if (!latest) return undefined;
-    try {
-      return JSON.parse(latest).id;
-    } catch {
-      return undefined;
-    }
   }
 
   // [버퍼 메시지&로그 저장]
@@ -169,7 +199,6 @@ export class RedisService implements OnModuleInit {
     // 2. 해당 메시지 위치 찾기
     const index = items.findIndex((item) => {
       const msg = JSON.parse(item);
-      // roomId까지 체크해주면 더 정확합니다.
       return msg.id === messageId && msg.user.id === userId && msg.room.id === roomId;
     });
     if (index === -1) return false;
@@ -226,7 +255,6 @@ export class RedisService implements OnModuleInit {
       await this.redis.rename(key, tempKey);
       dataExists = true;
 
-      // 데이터 파싱
       const data = await this.redis.lrange(tempKey, 0, -1);
       const parsedData = data.map((item) => {
         const obj = JSON.parse(item);
@@ -271,21 +299,21 @@ export class RedisService implements OnModuleInit {
   }
 
   // 6. 메시지 로그 조회 캐시
-  // 쿼리 캐시 저장
+
+  // [쿼리 캐시 저장]
   async setUserQueryCache(userId: number, queryStr: string, totalCount: number) {
-    // 다른 키들(user:sockets, room:users)과 형식을 맞춤
     const key = `user:logs:count:${userId}`;
     const data = JSON.stringify({ queryStr, totalCount });
     await this.redis.set(key, data, 'EX', 3600);
   }
 
-  // 쿼리 캐시 조회
+  // [쿼리 캐시 조회]
   async getUserQueryCache(userId: number): Promise<{ queryStr: string; totalCount: number } | null> {
     const key = `user:logs:count:${userId}`;
     const data = await this.redis.get(key);
     return data ? JSON.parse(data) : null;
   }
-  // 쿼리 캐시 일괄 삭제
+  // [쿼리 캐시 일괄 삭제]
   private async clearUserQueryCache() {
     const keys = await this.redis.keys('user:logs:count:*');
     if (keys.length > 0) {

@@ -44,7 +44,6 @@ export class RoomsController {
     @Req() req: any
   ) {
     await this.roomsService.deleteRoom(roomId, req.user.userId);
-    await this.socketService.deleteRoom(roomId);
 
     return { message: '삭제 되었습니다.' };
   }
