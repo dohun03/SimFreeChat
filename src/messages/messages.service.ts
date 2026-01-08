@@ -24,20 +24,6 @@ export class MessagesService {
     private readonly redisService: RedisService,
   ) {}
 
-  private userQueryCache: Map<number, { query: string; totalCount: number }> = new Map();
-
-  checkQuery(userId: number, query: any): boolean {
-    const newQuery = JSON.stringify(query);
-    const cache = this.userQueryCache.get(userId);
-    // 처음 조회하거나, 조건이 바뀐 경우 = count 실행 필요
-    if (!cache || cache.query !== newQuery) {
-      return true;
-    }
-  
-    // 조건 동일 = count 필요 없음
-    return false;
-  }
-
   async createMessage(
     roomId: number,
     userId: number,
@@ -318,52 +304,31 @@ export class MessagesService {
       const messageLogs = await rawQb
         .limit(Number(line) || 100)
         .getMany();
-  
-      // 캐시 여부 체크
-      const needCount = this.checkQuery(userId, {
-        search,
-        searchType,
-        startDate,
-        endDate,
-        messageType,
-        actionType,
-        roomIdType,
-        roomOwnerIdType,
-        userIdType,
+
+      const currentQueryStr = JSON.stringify({
+        search, searchType, startDate, endDate, messageType,
+        actionType, roomIdType, roomOwnerIdType, userIdType,
       });
-  
-      let totalCount: any = 0;
-  
-      if (needCount) {
+
+      const cachedData = await this.redisService.getUserQueryCache(userId);
+
+      let totalCount: number;
+
+      // 3. 캐시 존재 + 쿼리 조건 일치하는지 확인
+      if (cachedData && cachedData.queryStr === currentQueryStr) {
+        totalCount = cachedData.totalCount;
+        console.log('DB Count를 스킵');
+      } else {
         const row = await countQb
           .select('COUNT(log.created_at)', 'totalCount')
           .getRawOne();
-
+        
         totalCount = Number(row.totalCount);
-  
-        // 캐시에 저장
-        this.userQueryCache.set(userId, {
-          query: JSON.stringify({
-            search,
-            searchType,
-            startDate,
-            endDate,
-            messageType,
-            actionType,
-            roomIdType,
-            roomOwnerIdType,
-            userIdType,
-          }),
-          totalCount,
-        });
-  
-        console.log('count 실행 (조건 변경됨)');
-      } else {
-        // count 스킵 (캐시 totalCount 사용)
-        totalCount = this.userQueryCache.get(userId)?.totalCount;
-        console.log('count 스킵');
+
+        await this.redisService.setUserQueryCache(userId, currentQueryStr, totalCount);
+        console.log('DB Count를 실행');
       }
-  
+
       return { messageLogs, totalCount };
     } catch (err) {
       console.error('메시지 로그 조회 중 오류 발생:', err);

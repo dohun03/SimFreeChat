@@ -204,8 +204,15 @@ export class RedisService implements OnModuleInit {
   // 5. 메시지 배치 작업 (1분마다 실행)
   @Cron(CronExpression.EVERY_MINUTE)
   async handleBufferToDb() {
+    if (process.env.NODE_APP_INSTANCE && process.env.NODE_APP_INSTANCE !== '0') {
+      return;
+    }
+
+    console.log(`[Batch] 0번 프로세스에서 배치 작업을 시작합니다.`);
+
     await this.processBuffer('buffer:messages', this.messageRepository);
     await this.processBuffer('buffer:logs', this.messageLogRepository);
+    await this.clearUserQueryCache();
   }
 
   private async processBuffer(key: string, repository: Repository<any>) {
@@ -260,6 +267,29 @@ export class RedisService implements OnModuleInit {
           console.error('데이터 복구 실패:', recoveryError);
         }
       }
+    }
+  }
+
+  // 6. 메시지 로그 조회 캐시
+  // 쿼리 캐시 저장
+  async setUserQueryCache(userId: number, queryStr: string, totalCount: number) {
+    // 다른 키들(user:sockets, room:users)과 형식을 맞춤
+    const key = `user:logs:count:${userId}`;
+    const data = JSON.stringify({ queryStr, totalCount });
+    await this.redis.set(key, data, 'EX', 3600);
+  }
+
+  // 쿼리 캐시 조회
+  async getUserQueryCache(userId: number): Promise<{ queryStr: string; totalCount: number } | null> {
+    const key = `user:logs:count:${userId}`;
+    const data = await this.redis.get(key);
+    return data ? JSON.parse(data) : null;
+  }
+  // 쿼리 캐시 일괄 삭제
+  private async clearUserQueryCache() {
+    const keys = await this.redis.keys('user:logs:count:*');
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
     }
   }
 }
