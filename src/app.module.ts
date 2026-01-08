@@ -8,7 +8,7 @@ import { RoomsModule } from './rooms/rooms.module';
 import { MessagesModule } from './messages/messages.module';
 import { AuthModule } from './auth/auth.module';
 import { RedisGlobalModule } from './redis/redis.module';
-import { ChatModule } from './chat/chat.module';
+import { SocketModule } from './socket/socket.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { RoomUsersModule } from './room-users/room-users.module';
 import { UploadsModule } from './uploads/uploads.module';
@@ -50,7 +50,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     MessagesModule,
     AuthModule,
     RedisGlobalModule,
-    ChatModule,
+    SocketModule,
     RoomUsersModule,
     UploadsModule
   ],

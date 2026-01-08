@@ -5,7 +5,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './users.entity';
 import * as bcrypt from 'bcrypt';
 import { RedisService } from 'src/redis/redis.service';
-import { ChatService } from 'src/chat/chat.service';
+import { SocketService } from 'src/socket/socket.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
@@ -14,7 +14,7 @@ export class UsersService {
     @InjectRepository(User) 
     private userRepository: Repository<User>,
     private readonly redisService: RedisService,
-    private readonly chatService: ChatService,
+    private readonly socketService: SocketService,
   ) {}
 
   //회원가입
@@ -202,7 +202,7 @@ export class UsersService {
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
     if (user.isAdmin) throw new ForbiddenException('관리자 정보는 삭제할 수 없습니다.');
     try {
-      await this.chatService.leaveAllRooms(userId);
+      await this.socketService.leaveAllRooms(userId);
       const result = await this.userRepository.delete({
         id: userId,
       });

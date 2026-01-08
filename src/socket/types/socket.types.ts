@@ -1,4 +1,4 @@
-// chat.service.ts 리턴 형식 정의.
+// socket.service.ts 리턴 형식 정의.
 interface UserSummary {
   id: number;
   name: string;

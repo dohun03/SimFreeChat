@@ -4,13 +4,13 @@ import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { User } from './users.entity';
 import { RedisModule } from '@nestjs-modules/ioredis';
-import { ChatModule } from 'src/chat/chat.module';
+import { SocketModule } from 'src/socket/socket.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     RedisModule,
-    ChatModule,
+    SocketModule,
   ],
   providers: [UsersService],
   controllers: [UsersController],

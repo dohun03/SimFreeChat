@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
-export class ChatEvents {
+export class SocketEvents {
   constructor(private eventEmitter: EventEmitter2) {}
 
   leaveAllRooms(roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any) {

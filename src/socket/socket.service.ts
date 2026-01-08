@@ -4,13 +4,13 @@ import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
 import { In, Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
-import { ChatEvents } from './chat.events';
+import { SocketEvents } from './socket.events';
 import * as bcrypt from 'bcrypt';
 import { RoomUser } from 'src/room-users/room-user.entity';
-import { JoinRoomResult, KickUserResult, LeaveRoomResult } from './types/chat.types';
+import { JoinRoomResult, KickUserResult, LeaveRoomResult } from './types/socket.types';
 
 @Injectable()
-export class ChatService {
+export class SocketService {
   constructor(
     private readonly redisService: RedisService,
     @InjectRepository(User)
@@ -19,7 +19,7 @@ export class ChatService {
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(RoomUser)
     private readonly roomUserRepository: Repository<RoomUser>,
-    private readonly chatEvents: ChatEvents,
+    private readonly socketEvents: SocketEvents,
   ) {}
 
   private async getRoomUsersSummary(roomId: number) {
@@ -105,7 +105,7 @@ export class ChatService {
         const roomUsers = await this.getRoomUsersSummary(roomId);
         const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
-        this.chatEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, leaveUser);
+        this.socketEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, leaveUser);
 
         console.log(`${roomId}번 방에서 ${leaveUser.name}님을 내보냈습니다.`);
       })
@@ -113,7 +113,7 @@ export class ChatService {
   }
 
   async updateRoom(roomId: number, room: any): Promise<void> {
-    this.chatEvents.updateRoom(roomId, room);
+    this.socketEvents.updateRoom(roomId, room);
   }
 
   async deleteRoom(roomId: number): Promise<void> {
@@ -121,7 +121,7 @@ export class ChatService {
     await this.redisService.deleteRoom(roomId);
     await Promise.all(
       roomUsersArray.map(userId => {
-        this.chatEvents.deleteRoom(roomId, Number(userId));
+        this.socketEvents.deleteRoom(roomId, Number(userId));
       })
     );
   }

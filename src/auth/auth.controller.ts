@@ -2,14 +2,14 @@ import { BadRequestException, Body, Controller, Post, Req, Res, UseGuards } from
 import type { Response } from 'express';
 import { LoginUserDto } from './dto/login-user.dto';
 import { AuthService } from './auth.service';
-import { ChatService } from 'src/chat/chat.service';
+import { SocketService } from 'src/socket/socket.service';
 import { SessionGuard } from './guards/session.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly chatService: ChatService,
+    private readonly socketService: SocketService,
   ) {}
 
   @Post('login')
@@ -40,7 +40,7 @@ export class AuthController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response
   ) {
-    await this.chatService.leaveAllRooms(req.user.userId);
+    await this.socketService.leaveAllRooms(req.user.userId);
     await this.authService.logOut(req.user.sessionId);
 
     res.clearCookie('SESSIONID', {

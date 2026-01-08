@@ -2,14 +2,14 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query,
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomsService } from './rooms.service';
-import { ChatService } from 'src/chat/chat.service';
+import { SocketService } from 'src/socket/socket.service';
 import { SessionGuard } from 'src/auth/guards/session.guard';
 
 @Controller('rooms')
 export class RoomsController {
   constructor(
     private readonly roomsService: RoomsService,
-    private readonly chatService: ChatService
+    private readonly socketService: SocketService
   ) {}
 
   // 방 생성
@@ -31,7 +31,7 @@ export class RoomsController {
     @Req() req: any
   ) {
     const room = await this.roomsService.updateRoom(roomId, req.user.userId, updateRoomDto);
-    this.chatService.updateRoom(roomId, room);
+    this.socketService.updateRoom(roomId, room);
 
     return room;
   }
@@ -44,7 +44,7 @@ export class RoomsController {
     @Req() req: any
   ) {
     await this.roomsService.deleteRoom(roomId, req.user.userId);
-    await this.chatService.deleteRoom(roomId);
+    await this.socketService.deleteRoom(roomId);
 
     return { message: '삭제 되었습니다.' };
   }

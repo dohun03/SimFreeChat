@@ -1,10 +1,10 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { ChatGateway } from './chat.gateway';
-import { ChatService } from './chat.service';
+import { SocketGateway } from './socket.gateway';
+import { SocketService } from './socket.service';
 import { RedisGlobalModule } from '../redis/redis.module';
 import { User } from 'src/users/users.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ChatEvents } from './chat.events';
+import { SocketEvents } from './socket.events';
 import { MessagesModule } from 'src/messages/messages.module';
 import { RoomsModule } from 'src/rooms/rooms.module';
 import { Room } from 'src/rooms/rooms.entity';
@@ -20,10 +20,10 @@ import { RoomUser } from 'src/room-users/room-user.entity';
     forwardRef(() => RoomsModule),
   ],
   providers: [
-    ChatGateway,
-    ChatEvents,
-    ChatService,
+    SocketGateway,
+    SocketEvents,
+    SocketService,
   ],
-  exports: [ChatService]
+  exports: [SocketService]
 })
-export class ChatModule {}
+export class SocketModule {}

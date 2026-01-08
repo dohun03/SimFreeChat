@@ -9,7 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RedisService } from 'src/redis/redis.service';
-import { ChatService } from './chat.service';
+import { SocketService as SocketService } from './socket.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MessagesService } from 'src/messages/messages.service';
 import { map } from 'rxjs';
@@ -33,14 +33,12 @@ import { BanUserDto } from './dto/ban-user.dto';
   pingTimeout: 60000 * 2,   // 2분 동안 pong 없으면 연결 끊음
 })
 
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
-  
-  private userSockets: Map<number, Map<string, number>> = new Map();
 
   constructor(
-    private readonly chatService: ChatService,
+    private readonly socketService: SocketService,
     private readonly messagesService: MessagesService,
     private readonly roomUsersService: RoomUsersService,
     private readonly redisService: RedisService,
@@ -126,7 +124,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.data.userId = user.userId;
 
       const { roomId, password } = dto;
-      const { roomUsers, afterCount, joinUser } = await this.chatService.joinRoom(roomId, user.userId, password);
+      const { roomUsers, afterCount, joinUser } = await this.socketService.joinRoom(roomId, user.userId, password);
 
       // 방 입장 로직
       await this.removeUserSocket(roomId, user.userId);
@@ -154,7 +152,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const dto = await this.validateDto(LeaveRoomDto, payload);
       const user = await this.getUserFromSession(client);
-      const { roomUsers, roomUserCount, leaveUser } = await this.chatService.leaveRoom(dto.roomId, user.userId);
+      const { roomUsers, roomUserCount, leaveUser } = await this.socketService.leaveRoom(dto.roomId, user.userId);
 
       client.leave(dto.roomId.toString());
   
@@ -249,7 +247,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const dto = await this.validateDto(KickUserDto, payload);
       const owner = await this.getUserFromSession(client);
 
-      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
+      const { roomUsers, roomUserCount, kickedUser } = await this.socketService.kickUser(dto.roomId, dto.userId, owner);
 
       await this.removeUserSocket(dto.roomId, dto.userId);
 
@@ -274,7 +272,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner, dto.banReason);
 
-      const { roomUsers, roomUserCount, kickedUser } = await this.chatService.kickUser(dto.roomId, dto.userId, owner);
+      const { roomUsers, roomUserCount, kickedUser } = await this.socketService.kickUser(dto.roomId, dto.userId, owner);
 
       await this.removeUserSocket(dto.roomId, dto.userId);
 
