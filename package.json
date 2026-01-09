@@ -41,11 +41,11 @@
     "ioredis": "^5.7.0",
     "multer": "^2.0.2",
     "mysql2": "^3.14.3",
-    "node-snowflake": "^0.0.1",
     "redis": "^5.10.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sanitize-filename": "^1.6.3",
+    "snowflake-id": "^1.1.0",
     "socket.io-client": "^4.8.3",
     "typeorm": "^0.3.26",
     "uuid": "^11.1.0"

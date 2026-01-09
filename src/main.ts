@@ -3,15 +3,9 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
-import { Snowflake } from 'node-snowflake';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // 프로세스 별 고유 ID 설정
-  const workerId = Number(process.env.NODE_APP_INSTANCE) || 0;
-  Snowflake.init({ workerId, dataCenterId: 0 });
-  console.log(`[Process:${workerId}] Snowflake ID 생성기 초기화 완료`);
 
   // CORS 설정
   app.enableCors({

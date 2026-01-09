@@ -7,10 +7,12 @@ import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
 import { RedisService } from 'src/redis/redis.service';
-import { Snowflake } from 'node-snowflake';
 
 @Injectable()
 export class MessagesService {
+  private lastTimestamp = 0;
+  private sequence = 0;
+
   constructor(
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
@@ -23,6 +25,24 @@ export class MessagesService {
     private readonly dataSource: DataSource,
     private readonly redisService: RedisService,
   ) {}
+
+  // 고유 ID 생성 메서드
+  private generateCustomId(): string {
+    const now = Date.now();
+    const workerId = (process.env.NODE_APP_INSTANCE || '0').padStart(2, '0');
+
+    if (now === this.lastTimestamp) {
+      this.sequence = (this.sequence + 1) % 1000;
+    } else {
+      this.sequence = 0;
+      this.lastTimestamp = now;
+    }
+
+    const seqStr = this.sequence.toString().padStart(3, '0');
+    
+    // 최종 형태: [시간(13)][워커(2)][시퀀스(3)] -> 총 18자리 문자열
+    return `${now}${workerId}${seqStr}`;
+  }
 
   async createMessage(
     roomId: number,
@@ -45,8 +65,8 @@ export class MessagesService {
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
 
       const lastMessageId = await this.redisService.getLastMessageId(roomId);
-
-      const messageId = Snowflake.nextId();
+      
+      const messageId = this.generateCustomId();
       const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
       const messageAction = 'SEND';
 

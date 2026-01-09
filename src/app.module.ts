@@ -33,7 +33,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
         logging: ['error', 'warn'],
-        maxQueryExecutionTime: 100,
+        maxQueryExecutionTime: 500,
         logger: 'advanced-console',
         extra: {
           connectionLimit: 10,

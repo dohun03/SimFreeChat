@@ -9,6 +9,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class RedisService implements OnModuleInit {
+  private isProcessing = false;
+
   constructor(
     @InjectRedis() private readonly redis: Redis,
     @InjectRepository(Message)
@@ -185,7 +187,15 @@ export class RedisService implements OnModuleInit {
     multi.lpush(cacheKey, JSON.stringify(messageData));
     multi.ltrim(cacheKey, 0, 99);
 
-    return await multi.exec();
+    const results = await multi.exec();
+
+    // [수정] 500개 이상 쌓였고, 현재 처리 중이 아니면 즉시 실행
+    const messageCount = await this.redis.llen('buffer:messages');
+    if (messageCount >= 500 && !this.isProcessing) {
+      this.handleBufferToDb().catch(err => console.error('[Immediate-Batch] Error:', err));
+    }
+
+    return results;
   }
 
   // [버퍼 메시지&로그 삭제]
@@ -233,15 +243,24 @@ export class RedisService implements OnModuleInit {
   // 5. 메시지 배치 작업 (1분마다 실행)
   @Cron(CronExpression.EVERY_MINUTE)
   async handleBufferToDb() {
+    if (this.isProcessing) return;
+
     if (process.env.NODE_APP_INSTANCE && process.env.NODE_APP_INSTANCE !== '0') {
       return;
     }
 
-    console.log(`[Batch] 0번 프로세스에서 배치 작업을 시작합니다.`);
+    this.isProcessing = true;
+    console.log(`[Batch] 배치 작업을 시작합니다.`);
 
-    await this.processBuffer('buffer:messages', this.messageRepository);
-    await this.processBuffer('buffer:logs', this.messageLogRepository);
-    await this.clearUserQueryCache();
+    try {
+      await this.processBuffer('buffer:messages', this.messageRepository);
+      await this.processBuffer('buffer:logs', this.messageLogRepository);
+      await this.clearUserQueryCache();
+    } catch (error) {
+      console.error(`[Batch] 처리 중 치명적 에러:`, error);
+    } finally {
+      this.isProcessing = false; // 작업 완료 처리
+    }
   }
 
   private async processBuffer(key: string, repository: Repository<any>) {
@@ -275,7 +294,12 @@ export class RedisService implements OnModuleInit {
       });
 
       if (parsedData.length > 0) {
-        await repository.insert(parsedData);
+        await repository
+        .createQueryBuilder()
+        .insert()
+        .values(parsedData)
+        .orIgnore() // ID 중복 시 해당 데이터 제외 후 저장
+        .execute();
       }
 
       await this.redis.del(tempKey);
