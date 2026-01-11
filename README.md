@@ -85,10 +85,11 @@
 ## 사용한 기술 스택
 
 - **Nginx**: Reverse Proxy 및 정적 파일 서버 (API/WebSocket 프록시, gzip, 요청 제한 적용)
-- **Node.js / NestJS / TypeScript**: REST API 및 WebSocket 서버 구축  
-- **Socket.io**: 실시간 양방향 통신  
-- **MySQL**: 관계형 데이터 모델링 및 영구 데이터 저장  
-- **Redis**: 세션 캐싱 및 실시간 방 인원 저장  
+- **PM2**: Cluster 모드를 활용한 프로세스 병렬화 및 서버 자원 최적화, 무중단 운영 지원
+- **NestJS**: 모듈화된 아키텍처를 통한 확장성 있는 서버 구축
+- **Socket.io**: 실시간 양방향 통신
+- **MySQL**: 관계형 데이터 모델링 및 영구 데이터 저장
+- **Redis**: 세션 관리, Redis Adapter(Pub/Sub), 실시간 데이터 캐싱 및 Write-Back 버퍼 활용
 - **JavaScript / Bootstrap**: 프론트 UI 구성 및 이벤트 처리
 
 <div align="center"> 
@@ -103,6 +104,7 @@
   <img height="30" src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" />
   <img height="30" src="https://img.shields.io/badge/Nginx-009639?style=flat-square&logo=nginx&logoColor=white" />
   <img height="30" src="https://img.shields.io/badge/Ubuntu-E95420?style=flat-square&logo=ubuntu&logoColor=white" />
+  <img height="30" src="https://img.shields.io/badge/PM2-2B037A?style=flat-square&logo=pm2&logoColor=white" />
   <img height="30" src="https://img.shields.io/badge/Git-F05032?style=flat-square&logo=git&logoColor=white"/>
   <img height="30" src="https://img.shields.io/badge/GitHub-black?style=flat-square&logo=GitHub&logoColor=white"/>
 </div>
@@ -111,9 +113,7 @@
 
 ## 아키텍처
 
-<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/d6e7075a-03c2-46fb-aad7-85f6a63cc88d" />
-
-> App Server는 현재 단일 프로세스로 운영되며, 추후 PM2 Cluster를 이용한 병렬화와 Redis Pub/Sub 기반 확장을 통해 실시간 채팅 처리량 증가 및 안정성 강화를 계획하고 있습니다.
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/cdd0bfd0-b8ca-455c-9cac-c828a1a21528" />
 
 ---
 
@@ -217,7 +217,7 @@ CHAT/
 │  └─ app.js           # 클라이언트 라우터
 ├─ src/
 │  ├─ auth/            # 인증 관련 로직
-│  ├─ chat/            # 웹소켓 및 실시간 채팅 처리
+│  ├─ socket/          # 웹소켓 및 실시간 채팅 처리
 │  ├─ messages/        # 메시지 관련 로직
 │  ├─ redis/           # Redis 연동 및 캐싱
 │  ├─ room-users/      # 채팅방 밴 관리
@@ -247,7 +247,7 @@ git clone https://github.com/dohun03/SimFreeChat.git
 cd your-project # 프로그램이 실행될 디렉토리로 이동
 
 npm install
-npm run start # 실행용
+pm2 start ecosystem.config.js # 실행용
 npm run start:dev # 개발용
 ```
 
@@ -275,7 +275,25 @@ SOCKET_ORIGIN=http://localhost:4000
 
 ## 문제 해결
 
-### 🔸 1. 채팅방 메시지 조회 성능 개선
+### 🔸 1. 대규모 메시지 쓰기 성능 및 DB 부하 최적화
+
+#### 문제
+4vCPU, 4GB RAM 서버 환경에서 실시간 채팅 특성상 동시 접속자가 증가함에 따라 초당 수백 건 이상의 메시지 Insert 요청이 발생했으며, 이로 인해 데이터베이스 I/O 병목과 시스템 전반의 응답 지연(p95 지표 급등) 현상이 확인됨.
+
+#### 해결
+- **Redis Write-Back 아키텍처 도입**: 메시지 발생 시 즉시 DB에 저장하지 않고 Redis를 버퍼로 활용하여 데이터를 임시 저장함.
+- **이중 임계치 기반 배치 저장**: '1분 주기' 또는 '데이터 500개 누적' 시점에만 DB에 Batch Insert를 수행하도록 설계하여 DB 쓰기 횟수를 획기적으로 줄임.
+- **PM2 Cluster 모드 적용**: 단일 프로세스의 이벤트 루프 마비를 방지하기 위해 멀티 프로세싱 환경을 구축하여 서버 자원 활용도를 극대화함.
+
+#### 결과
+- 초당 수백 건의 쓰기 부하 상황에서도 CPU 사용률 및 Load Average를 안정적인 수준으로 유지.
+- 채팅 응답 속도(p95)를 기존 6s에서 30ms 수준으로 약 200배 단축.
+
+[관련 이슈: #3](https://github.com/dohun03/SimFreeChat/issues/3)
+
+---
+
+### 🔸 2. 채팅방 메시지 조회 성능 개선
 
 #### 문제
 채팅방별 메시지가 수천~수만 건 이상 누적되는 구조에서 채팅방 입장 시 
@@ -291,11 +309,11 @@ SOCKET_ORIGIN=http://localhost:4000
 - 불필요한 데이터 조회 및 DOM 렌더링 제거  
 - 서버, 네트워크, 클라이언트 전반의 부하 감소  
 
-🔗 관련 이슈: #2
+[관련 이슈: #2](https://github.com/dohun03/SimFreeChat/issues/2)
 
 ---
 
-### 🔸 2. 대용량 메시지 로그 조회 성능 최적화
+### 🔸 3. 대용량 메시지 로그 조회 성능 최적화
 
 #### 문제
 메시지 로그 테이블이 100만 건 이상으로 증가하면서 날짜, 방, 유저, 타입, 검색어 등 복합 조건 조회 시 SELECT / COUNT 쿼리 성능 저하 및 페이지 초기 로딩 지연이 발생함.
@@ -311,11 +329,11 @@ SOCKET_ORIGIN=http://localhost:4000
 - COUNT 쿼리 중복 실행 제거로 초기 로딩 지연 감소  
 - 복합 조건 증가 시에도 일관된 응답 속도 유지  
 
-🔗 관련 이슈: #1
+[관련 이슈: #1](https://github.com/dohun03/SimFreeChat/issues/1)
 
 ---
 
-### 🔸 3. 채팅방 소켓 구조 설계
+### 🔸 4. 채팅방 소켓 구조 설계
 
 #### 문제
 채팅방과 사용자 간의 연결 구조를 다중 탭 접속, 세션 충돌, 비정상 종료 상황에서도 안정적이고 일관되게 관리할 필요가 있었음.
@@ -329,26 +347,11 @@ SOCKET_ORIGIN=http://localhost:4000
 
 ---
 
-### 🔸 4. 채팅방 강제 연결 끊기 시 소켓 관리
-
-#### 문제
-채팅방 내 특정 사용자를 강제로 퇴장시키거나 연결을 끊어야 하는 상황에서 소켓을 관리할 방법이 필요했음.
-
-#### 해결
-- `Map` 구조(`socketId ↔ userId ↔ roomId`)로 소켓 정보를 매핑하여 관리  
-- 특정 유저의 소켓을 즉시 조회하여  
-  연결 해제, 메시지 전달 차단, 방 퇴장 처리 등을 효율적으로 수행 가능
-
-![socket map 구조 예시](https://github.com/user-attachments/assets/8cb042bb-74c9-4d8a-b0c1-4d6edaaae126)
-> socket map 구조 예시
-
----
-
 ## 추가 구현하고 싶은 기능들
 
 > 추후 여유가 된다면 구현해보고 싶은 기능입니다.
 
-- [ ] 음성 채팅 기능  
-- [x] 파일 전송 기능  
-- [ ] 메시지 답장 기능  
-- [ ] 이메일 인증 기반 비밀번호 찾기  
+- [ ] 음성 채팅 기능
+- [x] 파일 전송 기능
+- [ ] 메시지 답장 기능
+- [ ] 이메일 인증 기반 비밀번호 찾기
