@@ -107,18 +107,23 @@ export class RoomsService {
     }
   }
 
+  // 방 전체 유저 조회
+  async getRoomTotalUserCount(): Promise<number> {
+    return this.redisService.getRoomTotalUserCount();
+  }
+
   // 방 전체 조회
-  async getAllRooms(search?: string): Promise<RoomResponseDto[]> {
+  async getAllRooms(sort: string = 'popular_desc', search?: string): Promise<RoomResponseDto[]> {
+    console.log(sort);
     try {
-      const where: any = new Object();
+      const where: any = {};
 
       if (search) {
         where.name = Like(`%${search}%`);
       }
-  
+
       const rooms = await this.roomRepository.find({
         where,
-        order: { createdAt: 'DESC' },
         relations: ['owner'],
         select: {
           id: true,
@@ -133,25 +138,45 @@ export class RoomsService {
           }
         }
       });
+      if (rooms.length === 0) return [];
 
-      return await Promise.all(
-        rooms.map(async room => {
-          const roomUserCount = await this.redisService.getRoomUserCount(room.id);
-          return {
-            id: room.id,
-            name: room.name,
-            currentMembers: roomUserCount,
-            maxMembers: room.maxMembers,
-            password: !!room.password,
-            createdAt: room.createdAt,
-            updatedAt: room.updatedAt,
-            owner: {
-              id: room.owner.id,
-              name: room.owner.name,
-            }
-          }
-        })
-      );
+      // Redis에서 실시간 인원수 병렬 로드
+      const countsMap = await this.redisService.getRoomUserCountsBulk(rooms.map(r => r.id));
+
+      // DTO 매핑
+      const mappedRooms: RoomResponseDto[] = rooms.map(room => ({
+        id: room.id,
+        name: room.name,
+        currentMembers: countsMap[room.id] || 0,
+        maxMembers: room.maxMembers,
+        password: !!room.password,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        owner: {
+          id: room.owner.id,
+          name: room.owner.name,
+        }
+      }));
+
+      switch (sort) {
+        case 'popular_desc': // 인기 많은 순
+          mappedRooms.sort((a, b) => b.currentMembers - a.currentMembers || b.id - a.id);
+          break;
+        case 'popular_asc': // 인기 적은 순
+          mappedRooms.sort((a, b) => a.currentMembers - b.currentMembers || b.id - a.id);
+          break;
+        case 'createdAt_desc': // 최신순
+          mappedRooms.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          break;
+        case 'createdAt_asc': // 과거순
+          mappedRooms.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+          break;
+        default:
+          mappedRooms.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          break;
+      }
+
+      return mappedRooms;
     } catch (err) {
       console.error('DB 조회 에러:', err);
       throw new InternalServerErrorException('방 조회 중 문제가 발생했습니다.');

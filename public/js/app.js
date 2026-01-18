@@ -9,6 +9,7 @@ import { renderRoomsList } from './pages/rooms.js';
 import { renderAdmin } from './pages/admin/index.js';
 import { renderEditUser } from './pages/admin/editUser.js';
 import { renderBanManagerByRoom } from './pages/banManagerByRoom.js';
+import { renderTest } from './pages/test.js';
 
 // XSS 방지 함수
 export function escapeHtml(str) {
@@ -44,6 +45,9 @@ export async function router() {
   renderHeader(user);
 
   switch (true) {
+    case path === '/test':
+    renderTest(app);
+      break;
     case path === '/login':
       renderLogin(app, user);
       break;

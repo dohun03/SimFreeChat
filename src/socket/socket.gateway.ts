@@ -5,7 +5,8 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   ConnectedSocket,
-  MessageBody
+  MessageBody,
+  WsException
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RedisService } from 'src/redis/redis.service';
@@ -230,11 +231,9 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const messageId = await this.messagesService.deleteMessage(dto.roomId, user.userId, dto.messageId);
   
       this.server.to(dto.roomId.toString()).emit('messageDeleted', messageId);
-
-      return { success: true };
     } catch (err) {
       console.error(err.message);
-      return { success: false };
+      throw new WsException(err.message);
     }
   }
 
@@ -258,6 +257,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (err) {
       console.error(err.message);
+      throw new WsException(err.message);
     }
   }
 
@@ -270,8 +270,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const dto = await this.validateDto(BanUserDto, payload);
       const owner = await this.getUserFromSession(client);
 
+      // 밴 로직
       await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner, dto.banReason);
 
+      // 강퇴 로직
       const { roomUsers, roomUserCount, kickedUser } = await this.socketService.kickUser(dto.roomId, dto.userId, owner);
 
       await this.removeUserSocket(dto.roomId, dto.userId);
@@ -283,6 +285,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (err) {
       console.error(err.message);
+      throw new WsException(err.message);
     }
   }
 }

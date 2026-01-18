@@ -30,136 +30,129 @@ export async function renderChatRoom(container, user, roomId) {
   });
 
   try {
-    // 방 정보 조회
-    const roomRes = await fetch(`/api/rooms/${roomId}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (!roomRes.ok) {
-      container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
-      return;
-    }
+    // 1. 방 및 유저 정보 조회
+    const roomRes = await fetch(`/api/rooms/${roomId}`, { method: 'GET', credentials: 'include' });
+    if (!roomRes.ok) { container.textContent = '방 정보를 가져올 수 없습니다.'; return; }
     const room = await roomRes.json();
-    const isOwner = room.owner.id===user.id;
+    const isOwner = room.owner.id === user.id;
     
-    // 밴 정보 조회
-    const bannedUsersRes = await fetch(`/api/room-users/${roomId}`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (!bannedUsersRes.ok) {
-      container.textContent = '존재하지 않거나 접근할 수 없는 방입니다.';
+    const bannedUsersRes = await fetch(`/api/room-users/${roomId}`, { method: 'GET', credentials: 'include' });
+    const bannedUsers = bannedUsersRes.ok ? await bannedUsersRes.json() : [];
+    const banInfo = bannedUsers.find(b => b.user.id === user.id);
+
+    if (banInfo) {
+      showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banInfo.banReason}`);
+      closeSocketConnection();
       return;
     }
-    const bannedUsers = await bannedUsersRes.json();
-    let isBanned = false;
-    let banReason = '';
-    bannedUsers.forEach(b => {
-      if (b.user.id===user.id) {
-        isBanned = true;
-        banReason = b.banReason
-      }
-    });
+
+    if (room.currentMembers >= room.maxMembers) {
+      showErrorMessage('방의 인원이 가득 찼습니다.');
+      closeSocketConnection();
+      return;
+    }
 
     container.innerHTML = `
-      <div class="mt-3 mb-2 d-flex justify-content-between align-items-center">
-        <!-- 왼쪽: 제목 + 수정 버튼 -->
-        <div class="d-flex align-items-center gap-2">
-          <h3 id="room-name" class="mb-0 text-dark fw-semibold">${escapeHtml(room.name)}</h3>
-          <button type="button" id="room-edit" class="btn btn-sm btn-primary ${isOwner ? '' : 'd-none'}">채팅방 관리</button>
-          <button type="button" id="room-ban-manager" class="btn btn-sm btn-danger ${isOwner ? '' : 'd-none'}">채팅방 밴 관리</button>
-        </div>
-
-        <!-- 오른쪽: 검색창 -->
-        <div class="input-group input-group-sm" style="width: 300px;">
-          <div class="btn-group-vertical">
-            <button class="btn btn-outline-secondary btn-sm" type="button" id="search-up" style="padding: 0.25rem 0.35rem; font-size: 0.7rem;">
-              <i class="bi bi-chevron-up"></i>
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" type="button" id="search-down" style="padding: 0.25rem 0.35rem; font-size: 0.7rem;">
-              <i class="bi bi-chevron-down"></i>
-            </button>
-          </div>
-      
-          <input type="text" class="form-control" placeholder="메시지 검색..." id="chat-search" maxlength="20">
-          <button class="btn btn-outline-secondary" type="button"  id="chat-search-submit">
-            <i class="bi bi-search"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="d-flex gap-3 p-3 bg-secondary bg-opacity-10 rounded shadow-sm">
-        <div class="flex-grow-1 position-relative">
-          <!-- 시스템 알림 영역 -->
-          <div id="system-alerts" class="position-absolute top-0 start-0 w-100 px-3 mt-2" style="z-index: 1050;"></div>
-          <!-- 채팅 메시지 영역 -->
-          <div id="chat-messages" class="border rounded p-2 overflow-auto" style="height: 600px; background-color: #fff;">
-            <!-- 메시지 로딩 영역 -->
-            <ul id="messages-list" class="list-group list-group-flush"></ul>
-            <!-- 메시지 로딩 표시 영역 -->
-            <div id="loading-indicator" class="text-center my-2" style="display: none;">
-              <div class="spinner-border spinner-border-sm" role="status"></div>
-              <span class="ms-2">불러오는 중...</span>
+      <div class="d-flex flex-column" style="height: calc(100vh - 140px);">
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-dark border-3 flex-shrink-0">
+          <div class="flex-grow-1 min-width-0 pe-3" style="min-width: 0;">
+            <h2 id="room-name" class="fw-bolder m-0 text-truncate" 
+                style="letter-spacing: -1.5px; font-size: 1.8rem;" 
+                title="${escapeHtml(room.name)}">
+              # ${escapeHtml(room.name)}
+            </h2>
+            <div class="small fw-bold text-secondary text-nowrap">
+              생성일: ${formatDate(room.createdAt)} | 
+              인원: <span id="user-count" class="text-dark"><span id="current-count">0</span> / <span id="max-count">${room.maxMembers}</span></span>
             </div>
-            <!-- 새 메시지 알림 영역 -->
-            <div id="new-message-alert" class="position-absolute start-50 translate-middle-x d-none" style="bottom: 40px; z-index:1000;">
-              <div class="d-flex align-items-center gap-2 bg-primary text-white px-4 py-2 rounded-pill shadow-lg" style="cursor:pointer;">
-                <i class="bi bi-arrow-down-circle-fill fs-5"></i>
-                <span class="fw-semibold small">새 메시지 보기</span>
+          </div>
+
+          <div class="d-flex gap-2 flex-shrink-0">
+            <button id="room-edit" class="btn btn-outline-dark fw-bold btn-sm rounded-3 ${isOwner ? '' : 'd-none'}">
+              <i class="bi bi-gear-fill"></i> 설정
+            </button>
+            <button id="room-ban-manager" class="btn btn-outline-danger fw-bold btn-sm rounded-3 ${isOwner ? '' : 'd-none'}">
+              <i class="bi bi-person-x-fill"></i> 밴 관리
+            </button>
+            <button id="leave-room-btn" class="btn btn-dark fw-bold btn-sm px-3 rounded-3 text-white text-nowrap">나가기</button>
+          </div>
+        </div>
+
+        <div class="d-flex flex-grow-1 overflow-hidden gap-3 mb-3">
+          <div class="position-relative d-flex flex-column border border-dark border-3 bg-light rounded-4 overflow-hidden" 
+              style="flex: 0 0 75%; min-width: 0;">
+            <div id="system-alerts" class="position-absolute top-0 start-0 w-100 px-3 mt-2" style="z-index: 1050;"></div>
+            
+            <div id="chat-messages" class="flex-grow-1 overflow-y-auto p-3">
+              <ul id="messages-list" class="list-unstyled m-0"></ul>
+            </div>
+
+            <div id="new-message-alert" class="position-absolute start-50 translate-middle-x d-none" style="bottom: 20px; z-index:1000;">
+              <div class="bg-primary text-white px-3 py-2 rounded-pill shadow-lg small fw-bold" style="cursor:pointer;">
+                <i class="bi bi-arrow-down-circle-fill me-1"></i> 새 메시지 보기
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- 유저 목록 영역 -->
-        <div id="chat-users" class="border rounded p-2 bg-gray" style="height: 600px; min-width: 200px; overflow-y: auto;">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <strong>참여자</strong>
-            <span id="user-count" class="badge bg-primary rounded-pill">
-              <span id="current-count">0</span> /
-              <span id="max-count">${escapeHtml(room.maxMembers)}</span>
-            </span>
+          <div class="d-flex flex-column border border-dark border-3 bg-white p-3 rounded-4" style="flex: 0 0 calc(25% - 1rem); min-width: 180px;">
+            <div class="mb-3 flex-shrink-0">
+              <div class="fw-bold small mb-2 text-uppercase opacity-75">메시지 검색</div>
+              <div class="input-group border border-dark border-2 rounded-3 overflow-hidden bg-white">
+                <div class="d-flex flex-column border-end border-dark">
+                  <button id="search-up" class="btn btn-link btn-sm p-0 px-1 text-dark border-bottom rounded-0 shadow-none"><i class="bi bi-chevron-up"></i></button>
+                  <button id="search-down" class="btn btn-link btn-sm p-0 px-1 text-dark rounded-0 shadow-none"><i class="bi bi-chevron-down"></i></button>
+                </div>
+                <input type="text" id="chat-search" class="form-control border-0 small shadow-none" placeholder="검색...">
+                <button id="chat-search-submit" class="btn btn-white border-0"><i class="bi bi-search"></i></button>
+              </div>
+            </div>
+
+            <div class="flex-grow-1 overflow-y-auto">
+              <label class="fw-bold small mb-2 text-uppercase opacity-75">참여자</label>
+              <ul id="users-list" class="list-unstyled m-0"></ul>
+            </div>
           </div>
-          <ul id="users-list" class="list-group"></ul>
+        </div>
+
+        <div class="input-group border border-dark border-3 flex-shrink-0 rounded-4 overflow-hidden shadow-sm bg-white">
+          <button id="chat-upload-btn" class="btn btn-white border-0 px-3 border-end rounded-0"><i class="bi bi-card-image fs-5 text-dark"></i></button>
+          <input type="file" id="chat-upload-input" accept="image/*" style="display:none">
+          <textarea id="chat-input" class="form-control border-0 shadow-none p-3" placeholder="메시지를 입력하세요..." rows="1" style="resize: none; height: 58px; background-color: transparent; font-weight: 400;"></textarea>
+          <button id="chat-submit" class="btn btn-white border-0 px-4 border-start rounded-0 fw-bold"><i class="bi bi-send-fill fs-5"></i></button>
+          <button id="chat-reset" class="btn btn-white border-0 px-3 border-start rounded-0 text-danger"><i class="bi bi-x-circle-fill fs-5"></i></button>
         </div>
       </div>
 
-      <div class="mt-3 mb-3 hstack gap-3">
-        <!-- 사진 업로드 버튼 -->
-        <button type="button" id="chat-upload-btn" class="btn btn-outline-success align-self-start" title="사진 업로드">
-          <i class="bi bi-card-image"></i>
-        </button>
-      
-        <!-- 숨겨진 파일 input -->
-        <input type="file" id="chat-upload-input" accept="image/*" style="display:none">
 
-        <!-- 메시지 입력 칸 -->
-        <textarea id="chat-input"
-        class="form-control me-auto"
-        placeholder="메시지를 입력하세요"
-        aria-label="메시지를 입력하세요"
-        rows="1"
-        style="max-height: 7.5em; resize: none; overflow-y: auto;"></textarea>
-        
-        <button type="button" id="chat-submit" class="btn btn-outline-primary align-self-start">Submit</button>
-        <button type="button" id="chat-reset" class="btn btn-outline-danger align-self-start">Reset</button>
-      </div>
 
-      <!-- 유저 정보 모달 -->
-      <div class="modal fade" id="userInfoModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">사용자 정보</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      <div class="modal fade" id="userInfoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+          <div class="modal-content border-dark border-3 rounded-4 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+              <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-              <p><strong>아이디:</strong> <span id="modal-name"></span></p>
-              <p><strong>이메일:</strong> <span id="modal-email"></span></p>
-              <p><strong>가입일:</strong> <span id="modal-created"></span></p>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+            <div class="modal-body text-center pt-0">
+              <div class="mb-3">
+                <div class="display-6 text-dark"><i class="bi bi-person-circle"></i></div>
+              </div>
+              <h4 id="modal-name" class="fw-black mb-1">사용자명</h4>
+              <p id="modal-email" class="text-muted small mb-3">user@example.com</p>
+              
+              <div class="bg-light rounded-3 p-3 mb-3 text-start">
+                <div class="small text-muted fw-bold mb-1">가입일</div>
+                <div id="modal-created" class="small fw-bold text-dark">2024-00-00</div>
+              </div>
+
+              <div id="modal-admin-actions" class="d-none border-top pt-3 mt-2">
+                <div class="row g-2">
+                  <div class="col-6">
+                    <button id="modal-kick-btn" class="btn btn-outline-dark fw-bold w-100 btn-sm rounded-3">강퇴</button>
+                  </div>
+                  <div class="col-6">
+                    <button id="modal-ban-btn" class="btn btn-danger fw-bold w-100 btn-sm rounded-3">밴 처리</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -173,7 +166,6 @@ export async function renderChatRoom(container, user, roomId) {
     const chatMessages = document.getElementById('chat-messages');
     const messagesList = document.getElementById('messages-list');
     const newMessageAlert = document.getElementById('new-message-alert');
-    const loadingIndicator = document.getElementById('loading-indicator');
     const chatInput = document.getElementById('chat-input');
     const chatSubmit = document.getElementById('chat-submit');
     const chatReset = document.getElementById('chat-reset');
@@ -183,257 +175,81 @@ export async function renderChatRoom(container, user, roomId) {
     const chatSearchDown = document.getElementById('search-down');
     const roomEdit = document.getElementById('room-edit');
     const roomBanManager = document.getElementById('room-ban-manager');
+    const leaveRoomBtn = document.getElementById('leave-room-btn');
+    const chatUploadBtn = document.getElementById('chat-upload-btn');
+    const chatUploadInput = document.getElementById('chat-upload-input');
 
-    if (isBanned) {
-      showErrorMessage(`이 방에서 밴 처리된 사용자입니다: ${banReason}`);
-      closeSocketConnection();
-      return;
-    }
-
-    if (room.currentMembers>=room.maxMembers) {
-      showErrorMessage('방의 인원이 가득 찼습니다.');
-      closeSocketConnection();
-      return;
-    }
-
-    if (room.password && !isOwner) {
-      const password = prompt('비밀번호를 입력하세요');
-      if (!password) {
-        showErrorMessage('비밀번호를 입력하세요.');
-        closeSocketConnection();
-        return;
-      }
-      socket.emit('joinRoom', { roomId, password });
-    } else {
-      socket.emit('joinRoom', { roomId });
-    }
-
-    // [서버와 연결 끊김 Event]
-    socket.on('disconnect', (reason) => {
-      showErrorMessage(`연결 끊김: ${reason}`);
-      socket.off();
-      socket = null;
-    });
-    
-    // [수동으로 서버와 연결 끊김 Event]
-    socket.on('forcedDisconnect', (data) => {
-      showErrorMessage(`연결 끊김: ${data.msg}`);
-      socket.off();
-      socket = null;
-    });
-
-    // [방 수정 Event]
-    socket.on('roomUpdated', data => {
-      showSystemMessage(data.msg);
-      roomName.textContent = data.room.name;
-      maxCount.textContent = data.room.maxMembers;
-    });
-
-    // [공용 UI 소켓 Event]
-    socket.on('roomEvent', data => {
-      // 입/퇴장 메시지 표시
-      showSystemMessage(data.msg);
-    
-      // 접속 유저 표시
-      userList.innerHTML = '';
-      data.roomUsers.forEach(u => {
-        const li = document.createElement('li');
-        li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center', 'list-group-item-primary');
-    
-        // 유저 이름
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = u.name;
-    
-        // 방장일 경우
-        if (room.owner.id === u.id) {
-          const badge = document.createElement('span');
-          badge.className = 'badge bg-danger ms-2';
-          badge.textContent = '방장';
-          nameSpan.appendChild(badge);
-        }
-    
-        // 드롭다운 메뉴
-        const dropdownDiv = document.createElement('div');
-        dropdownDiv.className = 'dropdown';
-        const dropdownBtn = document.createElement('button');
-        dropdownBtn.className = 'btn p-0 border-0 bg-transparent shadow-none';
-        dropdownBtn.type = 'button';
-        dropdownBtn.setAttribute('data-bs-toggle', 'dropdown');
-        dropdownBtn.setAttribute('aria-expanded', 'false');
-        dropdownBtn.innerHTML = `<i class="bi bi-three-dots-vertical text-secondary"></i>`;
-        const dropdownMenu = document.createElement('ul');
-        dropdownMenu.className = 'dropdown-menu dropdown-menu-end';
-        dropdownMenu.innerHTML = `
-          <li><button class="dropdown-item user-info-btn" data-id="${u.id}">사용자 정보</button></li>
-          ${isOwner && room.owner.id!=u.id ?
-          `<li><hr class="dropdown-divider"></li>
-          <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><button class="dropdown-item text-danger ban-user-btn" data-id="${u.id}">밴</button></li>` : ''}
-        `;
-        
-        dropdownDiv.appendChild(dropdownBtn);
-        dropdownDiv.appendChild(dropdownMenu);
-    
-        li.appendChild(nameSpan);
-        li.appendChild(dropdownDiv);
-        userList.appendChild(li);
-      });
-    
-      // 접속 인원수 표시
-      currentCount.textContent = data.roomUserCount;
-
-      // 사용자 정보 버튼
-      userList.querySelectorAll('.user-info-btn').forEach(btn => {
-        btn.addEventListener('click', async e => {
-          const targetId = Number(e.target.dataset.id);
-          try {
-            const res = await fetch(`/api/users/${targetId}`, {
-              method: 'GET'
-            });
-            if (!res.ok) throw new Error('유저 정보를 가져올 수 없습니다.');
-            const targetUser = await res.json();
-      
-            document.getElementById('modal-name').textContent = targetUser.name;
-            document.getElementById('modal-email').textContent = targetUser.email || '-';
-            document.getElementById('modal-created').textContent = formatDate(targetUser.createdAt);
-      
-            const modalEl = document.getElementById('userInfoModal');
-            const modal = new bootstrap.Modal(document.getElementById('userInfoModal'));
-            modal.show();
-      
-            // 모달 닫히면 입력창 포커스
-            modalEl.addEventListener('hidden.bs.modal', () => {
-              chatInput.focus();
-            });
-          } catch (err) {
-            showSystemMessage(err.message);
-          }
-        });
-      });
-
-      // 사용자 강퇴 버튼
-      userList.querySelectorAll('.kick-user-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-          const targetId = e.target.dataset.id;
-          if (confirm('정말 이 사용자를 강퇴하시겠습니까?')) {
-            socket.emit('kickUser', { roomId, userId: Number(targetId) });
-          }
-        });
-      });
-
-      // 사용자 밴 버튼
-      userList.querySelectorAll('.ban-user-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-          const targetId = Number(e.target.dataset.id);
-      
-          const banReason = prompt('사용자를 밴하시겠습니까?\n밴 사유를 입력하세요:');
-          // if (!banReason) return;
-      
-          socket.emit('banUser', { roomId, userId: targetId, banReason });
-        });
-      });
-    });
-
-    // 시스템 알림
+    // 기능 로직 함수들
     function showSystemMessage(message) {
       const systemContainer = document.getElementById('system-alerts');
       if (!systemContainer) return;
 
       const alert = document.createElement('div');
-      alert.className = `alert alert-info alert-dismissible fade show shadow-sm mt-2`;
-      alert.role = 'alert';
-      alert.innerHTML = `
-        <strong>${escapeHtml(message)}</strong>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      `;
+
+      alert.className = `alert bg-dark text-white border border-2 border-light py-3 px-4 fade show shadow-lg mb-3 fw-bolder text-center`;
+      alert.innerHTML = `<span style="font-size: 1.05rem; letter-spacing: -0.5px;">${escapeHtml(message)}</span>`;
+      
       systemContainer.prepend(alert);
-
-      // 최대 4개까지
-      while (systemContainer.children.length > 4) {
-        systemContainer.removeChild(systemContainer.lastChild);
-      }
-
-      // 3초 후 자동 제거
+      
       setTimeout(() => {
         alert.classList.remove('show');
         setTimeout(() => alert.remove(), 300);
-      }, 2000);
+      }, 3000);
     }
 
     function showErrorMessage(message) {
-      container.innerHTML = `
-      <div class="alert alert-danger d-flex align-items-center mt-4" role="alert">
-        <div>
-          ${escapeHtml(message)}
-        </div>
-      </div>
-      `;
+      container.innerHTML = `<div class="alert alert-danger mt-4 fw-bold">${escapeHtml(message)}</div>`;
     }
 
     function createMessageElement(msg, currentUserId) {
-      const createdAt = formatDate(msg.createdAt);
+      const date = formatDate(msg.createdAt);
       const isMine = msg.user.id === currentUserId;
-    
+      
       const li = document.createElement('li');
-      li.classList.add('list-group-item', 'chat-message', 'position-relative', 'py-2');
+      li.className = `chat-message mb-3 d-flex flex-column w-100 ${isMine ? 'align-items-end' : 'align-items-start'}`;
       li.dataset.id = msg.id;
-    
-      if (isMine) li.classList.add('bg-light', 'mine');
-    
-      let contentHtml = '';
-    
+
+      let contentHtml = "";
+      let bubbleClass = isMine ? 'bg-dark text-white' : 'bg-white text-dark';
+      
       if (msg.isDeleted) {
-        contentHtml = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
+        contentHtml = `<span class="fw-bold small fst-italic text-secondary">삭제된 메시지입니다.</span>`;
+        bubbleClass = 'bg-light text-muted border-secondary opacity-75';
       } else {
-        switch (msg.type) {
-          case 'text':
-            contentHtml = escapeHtml(msg.content);
-            break;
-          case 'image':
-            const url = `/uploads/images/${msg.content}`;
-            contentHtml = `<img src="${url}" alt="image" style="max-height:200px; max-width: 100%; object-fit: contain; border-radius:5px;">`;
-            break;
-          default:
-            contentHtml = '<span class="chat-content text-danger fst-italic small">알 수 없는 메시지 형식입니다.</span>';
-        }
+        contentHtml = (msg.type === 'image' ? 
+          `<img src="/uploads/images/${msg.content}" class="img-fluid rounded-3 border border-dark" style="max-height:450px;">` : 
+          escapeHtml(msg.content));
       }
-    
+
       li.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start">
-          <div class="flex-grow-1 me-4">
-            <small class="text-muted d-block mb-1">${createdAt}</small>
-            <strong class="text-${isMine ? 'primary' : 'dark'} d-block">${escapeHtml(msg.user.name)}</strong>
-            <div class="chat-content">${contentHtml}</div>
+        <div class="small fw-black mb-1 px-2 text-dark opacity-75 user-info-trigger" 
+             style="font-size: 0.8rem; cursor: pointer;" 
+             data-id="${msg.user.id}">
+          ${escapeHtml(msg.user.name)}
+        </div>
+
+        <div class="d-flex align-items-end gap-2 ${isMine ? 'flex-row-reverse' : ''}" style="max-width: 90%;">
+          <div class="bubble-content py-2 px-3 shadow-sm border border-2 border-dark ${bubbleClass} ${isMine ? 'rounded-start-4 rounded-bottom-4' : 'rounded-end-4 rounded-bottom-4'}" 
+               style="word-break: break-all; font-weight: 500; min-height: 38px; white-space: pre-wrap;">${contentHtml}</div>
+
+          <div class="d-flex flex-column ${isMine ? 'align-items-end' : 'align-items-start'}" style="min-width: fit-content;">
+            ${isMine && !msg.isDeleted ? 
+              `<button class="btn btn-link btn-sm p-0 border-0 text-danger text-decoration-none delete-btn fw-bold mb-1" style="font-size: 10px;">삭제</button>` : ''}
+            <div class="text-nowrap fw-bold text-muted" style="font-size: 10px; letter-spacing: -0.5px;">
+              ${date}
+            </div>
           </div>
         </div>
-        ${isMine && !msg.isDeleted ? 
-          `<button class="btn btn-sm btn-outline-danger delete-btn position-absolute top-0 end-0 mt-1 me-1" style="opacity: 0; transition: opacity 0.2s;">
-            <i class="bi bi-trash"></i>
-          </button>` : ''
-        }
       `;
-    
-      // 내용 스타일
-      const contentDiv = li.querySelector('.chat-content');
-      contentDiv.style.whiteSpace = 'pre-line';
-      contentDiv.style.wordBreak = 'break-word';
-    
       return li;
     }
 
-    // 메시지 최댓값 유지
+    // 메시지 개수 제한 (기존 로직 유지)
     function keepMessageLimit(direction = 'recent') {
-      if (!messagesList) return;
-
-      const limit = 100;
+      const limit = 200;
       const currentLength = messagesList.children.length;
-
-      // 메시지가 최댓값보다 많을 경우 삭제
-      console.log(currentLength);
       if (currentLength > limit) {
         const removeCount = currentLength - limit;
-
         for (let i = 0; i < removeCount; i++) {
           if (direction === 'before') {
             messagesList.removeChild(messagesList.lastElementChild);
@@ -444,14 +260,24 @@ export async function renderChatRoom(container, user, roomId) {
       }
     }
 
+    function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+
+    function scrollWhenReady() {
+      const images = messagesList.querySelectorAll('img');
+      let loadedCount = 0;
+      if (images.length === 0) return scrollToBottom();
+      images.forEach(img => {
+        if (img.complete) { loadedCount++; if (loadedCount === images.length) scrollToBottom(); }
+        else { img.addEventListener('load', () => { loadedCount++; if (loadedCount === images.length) scrollToBottom(); }); }
+      });
+    }
+
     // 메시지 로드 (API 요청)
     async function loadMessages(direction = 'init') {
       if (loading) return;
       loading = true;
 
-      const topMessageBeforeLoading = messagesList.firstElementChild;
-
-      if (loadingIndicator) loadingIndicator.style.display = 'block';
+      const firstMessage = messagesList.firstElementChild;
 
       let url = `/api/messages/${roomId}`;
       const firstId = messagesList.firstElementChild?.dataset.id;
@@ -479,12 +305,14 @@ export async function renderChatRoom(container, user, roomId) {
         });
 
         if (direction === 'before') {
+          const beforeTop = firstMessage?.getBoundingClientRect().top;
+
           messagesList.prepend(fragment);
           keepMessageLimit('before');
-          // 스크롤 위치 고정
-          if (topMessageBeforeLoading) {
-            topMessageBeforeLoading.scrollIntoView({ block: 'start' });
-          }
+
+          const afterTop = firstMessage.getBoundingClientRect().top;
+          const diff = afterTop - beforeTop;
+          chatMessages.scrollTop += diff;
         }
         else if (direction === 'recent') {
           messagesList.appendChild(fragment);
@@ -501,12 +329,111 @@ export async function renderChatRoom(container, user, roomId) {
         showSystemMessage('메시지 로딩 실패');
       } finally {
         loading = false;
-        if (loadingIndicator) loadingIndicator.style.display = 'none';
       }
     }
     loadMessages('init');
 
-    // 메시지 로드 (스크롤 이벤트)
+    // 소켓 이벤트 바인딩
+    socket.emit('joinRoom', { roomId, password: room.password && !isOwner ? prompt('비밀번호를 입력하세요') : undefined });
+
+    socket.on('roomEvent', data => {
+      showSystemMessage(data.msg);
+      
+      userList.innerHTML = '';
+      data.roomUsers.forEach(u => {
+        const li = document.createElement('li');
+        li.className = 'd-flex align-items-center mb-2 p-2 rounded-3 bg-white border border-dark border-1 shadow-sm';
+        li.innerHTML = `
+          <span class="text-success small me-2">●</span>
+          <span class="fw-bold small text-dark text-truncate flex-grow-1">${escapeHtml(u.name)}</span>
+          ${room.owner.id === u.id ? '<span class="badge bg-danger p-1 me-1" style="font-size:8px;">OWNER</span>' : ''}
+          <div class="dropdown">
+            <button class="btn p-0 border-0" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end shadow border-2">
+              <li><button class="dropdown-item fw-bold user-info-btn" data-id="${u.id}">정보</button></li>
+              ${isOwner && room.owner.id !== u.id ? `
+                <li><button class="dropdown-item text-danger kick-user-btn" data-id="${u.id}">강퇴</button></li>
+                <li><button class="dropdown-item text-danger ban-user-btn" data-id="${u.id}">밴</button></li>` : ''}
+            </ul>
+          </div>`;
+        userList.appendChild(li);
+      });
+      currentCount.textContent = data.roomUserCount;
+    });
+
+    // [방 정보 수정 반영]
+    socket.on('roomUpdated', data => {
+      showSystemMessage(data.msg);
+      roomName.textContent = data.room.name;
+      maxCount.textContent = data.room.maxMembers;
+    });
+
+    socket.on('exception', (data) => {
+      alert(`서버 알림: ${data.message}`);
+    });
+
+    // [강제 퇴장 이벤트 처리]
+    socket.on('forcedDisconnect', (data) => {
+      showErrorMessage(`연결 끊김: ${data.msg}`);
+      closeSocketConnection();
+    });
+
+    socket.on('messageCreate', data => {
+      const { message, lastMessageId } = data;
+      const myLastMessageId = messagesList.lastElementChild?.dataset.id || "0";
+
+      const hasScroll = chatMessages.scrollHeight > chatMessages.clientHeight;
+      const isMine = message.user.id === user.id;
+      const isBottom = isAtBottom(100);
+
+      if (!hasScroll || isMine || (isBottom && myLastMessageId == lastMessageId)) {
+        
+        messagesList.appendChild(createMessageElement(message, user.id));
+        
+        keepMessageLimit('recent'); 
+
+        if (message.type === 'image') {
+          scrollWhenReady();
+        } else {
+          scrollToBottom();
+        }
+      } else {
+        if (typeof newMessageAlert === 'function') {
+          newMessageAlert(); 
+        } else {
+          const alertElem = document.getElementById('new-message-alert');
+          if (alertElem) alertElem.classList.remove('d-none');
+        }
+      }
+
+      serverLastMessageId = lastMessageId;
+    });
+
+    socket.on('messageDeleted', id => {
+      const messageItem = document.querySelector(`li[data-id="${id}"]`);
+      if (messageItem) {
+        const bubble = messageItem.querySelector('.bubble-content');
+        const deleteBtn = messageItem.querySelector('.delete-btn');
+        
+        bubble.classList.remove('bg-dark', 'text-white', 'bg-white', 'text-dark');
+        bubble.classList.add('bg-light', 'text-muted', 'border-secondary', 'opacity-75');
+        
+        bubble.innerHTML = `<span class="fw-bold small fst-italic text-secondary">삭제된 메시지입니다.</span>`;
+        
+        if (deleteBtn) deleteBtn.remove();
+      }
+    });
+
+    // 이벤트 리스너
+    chatSubmit.addEventListener('click', () => {
+      if (!chatInput.value.trim()) return;
+      socket.emit('sendMessage', { roomId, content: chatInput.value, type: 'text' });
+      chatInput.value = '';
+      chatInput.style.height = '58px';
+    });
+
+    chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSubmit.click(); } });
+
     function isAtTop(scrollGap = 50) {
       return chatMessages.scrollTop <= scrollGap;
     }
@@ -515,70 +442,38 @@ export async function renderChatRoom(container, user, roomId) {
       return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - scrollGap;
     }
 
-    let isAlreadyAtBottom = false;
-    let isAlreadyAtTop = false;
+    let topLock = false;
+    let bottomLock = false;
 
     chatMessages.addEventListener('scroll', () => {
-      const atTop = isAtTop(5);
+      // TOP
+      if (!topLock && chatMessages.scrollTop <= 5) {
+        topLock = true;
 
-      if (atTop) {
-        if (!isAlreadyAtTop && !loading) {
-          console.log('상단 도달 - 과거 메시지 로딩');
-          loadMessages('before');
-          isAlreadyAtTop = true;
-        }
-      } else {
-        isAlreadyAtTop = false;
+        loadMessages('before').finally(() => {
+          setTimeout(() => {
+            topLock = false;
+          }, 100);
+        });
+        return;
       }
 
-      // 2. 바닥(Bottom) 체크
-      const atBottom = isAtBottom(20);
+      // BOTTOM
+      if (
+        !bottomLock &&
+        chatMessages.scrollTop + chatMessages.clientHeight >=
+          chatMessages.scrollHeight - 5
+      ) {
+        bottomLock = true;
 
-      if (atBottom) {
-        if (!isAlreadyAtBottom) {
-          console.log('바닥 도달 - 최신 메시지 로딩');
-          hideNewMessageAlert();
-          loadMessages('recent');
-          isAlreadyAtBottom = true;
-        }
-      } else {
-        // 바닥에서 위로 올라가면 다시 잠금 해제
-        isAlreadyAtBottom = false;
+        loadMessages('recent').finally(() => {
+          setTimeout(() => {
+            bottomLock = false;
+          }, 100);
+        });
       }
     });
 
-    // 이미지 모두 로딩 후 스크롤
-    function scrollToBottom() {
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    function scrollWhenReady() {
-      const images = messagesList.querySelectorAll('img');
-      let loadedCount = 0;
-  
-      if (images.length === 0) {
-        scrollToBottom();
-      } else {
-        images.forEach(img => {
-          img.addEventListener('load', () => {
-            loadedCount++;
-            if (loadedCount === images.length) {
-              scrollToBottom();
-            }
-          });
-  
-          // 이미 캐시된 이미지 처리
-          if (img.complete) {
-            loadedCount++;
-            if (loadedCount === images.length) {
-              scrollToBottom();
-            }
-          }
-        });
-      }
-    }
-
-    // 최신 메시지 알림 및 이동
     function showNewMessageAlert() {
       newMessageAlert.classList.remove('d-none');
     }
@@ -595,275 +490,145 @@ export async function renderChatRoom(container, user, roomId) {
       hideNewMessageAlert();
     });
 
-    // 메시지 전송
-    chatSubmit.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    function sendMessage() {
-      const content = chatInput.value;
-      if (!content) return;
-
-      socket.emit('sendMessage', { roomId, content, type: 'text' });
-      chatInput.value = '';
-      resizeTextarea();
-    }
-
-    // [새 채팅 메시지 출력 Event]
-    socket.on('messageCreate', data => {
-      const { message, lastMessageId } = data;
-      const myLastMessageId = messagesList.lastElementChild?.dataset.id || "0";
-
-      const hasScroll = chatMessages.scrollHeight > chatMessages.clientHeight;
-      const isMine = message.user.id === user.id;
-
-      // 최신 
-      if (!hasScroll || isMine || (isAtBottom(100) && myLastMessageId == lastMessageId)) {
-        const li = createMessageElement(message, user.id);
-        messagesList.appendChild(li);
-        
-        if (message.type === 'image') {
-          scrollWhenReady();
-        } else {
-          scrollToBottom();
-        }
-
-        keepMessageLimit();
-
-      } else {
-        showNewMessageAlert();
-      }
-
-      serverLastMessageId = lastMessageId;
-    });
-
-    // 메시지 입력 칸 높이 조절
-    function resizeTextarea() {
-      chatInput.style.height = "auto";
-      const lineHeight = 24; // 1줄 높이(px)
-      const maxHeight = lineHeight * 5;
-    
-      if (chatInput.scrollHeight > maxHeight) {
-        chatInput.style.height = maxHeight + "px";
-        chatInput.style.overflowY = "auto";
-      } else {
-        chatInput.style.height = chatInput.scrollHeight + "px";
-        chatInput.style.overflowY = "hidden";
-      }
-    }
-    chatInput.addEventListener('input', resizeTextarea);
-    
-    // 메시지 리셋
-    chatReset.addEventListener('click', () => {
-      chatInput.value = '';
-      resizeTextarea();
-    });
-
-    // 메시지 삭제
-    messagesList.addEventListener('click', async (e) => {
-      const deleteBtn = e.target.closest('.delete-btn');
-      if (!deleteBtn) return;
-    
-      const messageItem = deleteBtn.closest('.chat-message');
-      const messageId = messageItem.dataset.id;
-    
-      if (confirm('이 메시지를 삭제하시겠습니까?')) {
-        socket.emit('deleteMessage', { roomId, messageId }, (res) => {
-          if (res.success) {
-            deleteBtn.remove();
-          } else {
-            alert('삭제에 실패했습니다.');
-          }
-        });
-      }
-    });
-
-    // [메시지 삭제 Event]
-    socket.on('messageDeleted', messageId => {
-      const content = document.querySelector(`li[data-id="${messageId}"] .chat-content`);
-      if (!content) return;
-      
-      content.innerHTML = '<span class="chat-content text-muted fst-italic small">삭제된 메시지입니다.</span>';
-    });
-
-    // 메시지 삭제 버튼 hover 이벤트
-    messagesList.addEventListener('mouseover', (e) => {
-      const li = e.target.closest('.chat-message');
-      if (!li) return;
-
-      const deleteBtn = li.querySelector('.delete-btn');
-      if (deleteBtn) deleteBtn.style.opacity = '1';
-    });
-
-    messagesList.addEventListener('mouseout', (e) => {
-      const li = e.target.closest('.chat-message');
-      if (!li) return;
-
-      const deleteBtn = li.querySelector('.delete-btn');
-      if (deleteBtn) deleteBtn.style.opacity = '0';
-    });
-
-    // 메시지 검색
-    chatSearchSubmit.addEventListener('click', searchMessage);
-    chatSearchInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        searchMessage();
-      }
-    });
-
-    let searchArray;
-    let searchStatus = 0;
-    
-    async function searchMessage() {
-      const search = chatSearchInput.value.trim();
-      if (!search) {
-        showSystemMessage('검색어를 입력하세요.');
-        return;
-      }
-      
-      try {
-        searchStatus = 0;
-
-        const res = await fetch(`/api/messages/${roomId}?search=${encodeURIComponent(search)}&cursor=${cursorId}`, {
-          method: 'GET'
-        });
-        if (!res.ok) throw new Error('메시지를 불러오는 중 오류가 발생했습니다.');
-
-        const messages = await res.json();
-        if (messages.length===0) {
-          showSystemMessage('검색 결과가 없습니다.');
-          return;
-        }
-
-        searchArray = messages;
-
-        console.log(searchArray);
-        
-        const firstMessageId = searchArray[searchStatus].id;
-        highlightMessage(firstMessageId);
-      } catch (err) {
-        console.log('서버 에러:', err);
-      }
-    }
-
-    // 메시지 검색 하이라이트
-    function highlightMessage(targetId) {
-      // 이전 하이라이트 제거
-      document.querySelectorAll('.border-warning').forEach(el => {
-        el.classList.remove('border', 'border-warning', 'border-3', 'rounded-3');
-      });
-
-      const target = document.querySelector(`[data-id="${targetId}"]`);
-      if (!target) return;
-
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target.classList.add('border', 'border-warning', 'border-3', 'rounded-3');
-
-      setTimeout(() => {
-        target.classList.remove('border', 'border-warning', 'border-3', 'rounded-3');
-      }, 3000);
-    }
-
-    // 메시지 검색 위로 이동 버튼
-    chatSearchUp.addEventListener('click', () => {
-      if (!searchArray || searchArray.length === 0) {
-        showSystemMessage('검색 결과가 없습니다.');
-        return;
-      }
-      searchStatus++;
-      if (searchStatus >= searchArray.length) {
-        showSystemMessage('마지막 검색 결과입니다.');
-        searchStatus--;
-        return;
-      }
-
-      const targetId = searchArray[searchStatus].id;
-      highlightMessage(targetId);
-    });
-
-    // 메시지 아래로 이동 버튼
-    chatSearchDown.addEventListener('click', () => {
-      if (!searchArray || searchArray.length === 0) {
-        showSystemMessage('검색 결과가 없습니다.');
-        return;
-      }
-      searchStatus--;
-      if (searchStatus < 0) {
-        showSystemMessage('첫 번째 검색 결과입니다.');
-        searchStatus = 0;
-        return;
-      }
-
-      const targetId = searchArray[searchStatus].id;
-      highlightMessage(targetId);
-    });
-
-    // 채팅방 수정 페이지
-    roomEdit.addEventListener('click', () => {
-      window.open(`/edit-room/${roomId}`, '_blank');
-    });
-
-    // 채팅방 밴 관리 페이지
-    roomBanManager.addEventListener('click', () => {
-      window.open(`/room/${roomId}/ban-manager`, '_blank');
-    });
-    
-    // 사진 업로드
-    const chatUploadBtn = document.getElementById('chat-upload-btn');
-    const chatUploadInput = document.getElementById('chat-upload-input');
-
-    chatUploadBtn.addEventListener('click', () => {
-      chatUploadInput.click(); // 숨겨진 input 클릭 트리거
-    });
-
+    chatUploadBtn.addEventListener('click', () => chatUploadInput.click());
     chatUploadInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      // FormData에 담아서 POST
       const formData = new FormData();
       formData.append('file', file);
 
       try {
-        const res = await fetch('/api/uploads', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include',
-        });
-      
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.message || '업로드 실패');
-        }
-      
+        const res = await fetch('/api/uploads', { method: 'POST', body: formData, credentials: 'include' });
         const data = await res.json();
-      
         socket.emit('sendMessage', { roomId, content: data.filename, type: 'image' });
-      
-        chatUploadInput.value = '';
       } catch (err) {
-        alert(`사진 업로드 실패: ${err.message}`);
+        alert('업로드 실패');
       }
     });
+
+    messagesList.addEventListener('click', e => {
+      const btn = e.target.closest('.delete-btn');
+      if (btn && confirm('삭제하시겠습니까?')) {
+        const id = btn.closest('.chat-message').dataset.id;
+        socket.emit('deleteMessage', { roomId, messageId: id });
+      }
+    });
+
+    // [강퇴/밴/정보 버튼 위임 이벤트]
+    userList.addEventListener('click', async (e) => {
+      const targetId = Number(e.target.dataset.id);
+      if (!targetId) return;
+
+      // 1. 강퇴 처리
+      if (e.target.classList.contains('kick-user-btn')) {
+        if (confirm('정말 이 사용자를 강퇴하시겠습니까?')) {
+          socket.emit('kickUser', { roomId, userId: targetId });
+        }
+      } 
+      // 2. 밴 처리
+      else if (e.target.classList.contains('ban-user-btn')) {
+        const banReason = prompt('밴 사유를 입력하세요:');
+        if (banReason !== null) {
+          socket.emit('banUser', { roomId, userId: targetId, banReason });
+        }
+      }
+    });
+    // 유저 정보 모달 연동
+    const userModal = new bootstrap.Modal(document.getElementById('userInfoModal'));
+
+    async function openUserInfoModal(targetUserId) {
+      try {
+        const res = await fetch(`/api/users/${targetUserId}`);
+        if (!res.ok) return;
+        const targetUser = await res.json();
+
+        // 데이터 채우기
+        document.getElementById('modal-name').textContent = targetUser.name;
+        document.getElementById('modal-email').textContent = targetUser.email;
+        document.getElementById('modal-created').textContent = formatDate(targetUser.createdAt);
+
+        // 방장 권한 체크
+        const adminActions = document.getElementById('modal-admin-actions');
+        if (isOwner && targetUser.id !== user.id) {
+          adminActions.classList.remove('d-none');
+
+          document.getElementById('modal-kick-btn').onclick = () => {
+            if (confirm(`${targetUser.name}님을 강퇴하시겠습니까?`)) {
+              socket.emit('kickUser', { roomId, userId: targetUser.id });
+              userModal.hide();
+            }
+          };
+          
+          document.getElementById('modal-ban-btn').onclick = () => {
+            const reason = prompt('밴 사유를 입력하세요:');
+            if (reason) {
+              socket.emit('banUser', { roomId, userId: targetUser.id, banReason: reason });
+              userModal.hide();
+            }
+          };
+        } else {
+          adminActions.classList.add('d-none');
+        }
+
+        userModal.show();
+      } catch (err) {
+        console.error('유저 정보 로드 실패', err);
+      }
+    }
+
+    // 1. 메시지 목록의 닉네임 클릭 시
+    messagesList.addEventListener('click', e => {
+      const trigger = e.target.closest('.user-info-trigger');
+      if (trigger) openUserInfoModal(trigger.dataset.id);
+    });
+
+    // 2. 우측 참여자 목록의 '정보' 버튼 클릭 시
+    userList.addEventListener('click', e => {
+      const infoBtn = e.target.closest('.user-info-btn');
+      if (infoBtn) openUserInfoModal(infoBtn.dataset.id);
+    });
+
+    // 검색 기능
+    let searchArray = [];
+    let searchIdx = 0;
+    chatSearchSubmit.addEventListener('click', async () => {
+      const val = chatSearchInput.value.trim();
+      if (!val) return;
+      const res = await fetch(`/api/messages/${roomId}?search=${encodeURIComponent(val)}`);
+      searchArray = await res.json();
+      if (searchArray.length > 0) { searchIdx = 0; highlight(searchArray[0].id); }
+      else showSystemMessage('결과 없음');
+    });
+
+    function highlight(id) {
+      const target = document.querySelector(`[data-id="${id}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const bubble = target.querySelector('.msg-bubble');
+        bubble.classList.add('border-warning', 'border-4');
+        setTimeout(() => bubble.classList.remove('border-warning', 'border-4'), 2000);
+      }
+    }
+
+    chatSearchUp.addEventListener('click', () => { if (searchArray[++searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx--; });
+    chatSearchDown.addEventListener('click', () => { if (searchArray[--searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx = 0; });
+
+    // 간단한 버튼 이벤트
+    leaveRoomBtn.addEventListener('click', () => { if (confirm('나갈까요?')) { leaveChatRoom(); window.location.href = '/'; } });
+    roomEdit.addEventListener('click', () => window.open(`/edit-room/${roomId}`, '_blank'));
+    roomBanManager.addEventListener('click', () => window.open(`/room/${roomId}/ban-manager`, '_blank'));
+    chatReset.addEventListener('click', () => { chatInput.value = ''; chatInput.style.height = '58px'; });
+
   } catch (err) {
-    container.textContent = `서버 에러가 발생했습니다. ${err}`;
+    showErrorMessage('서버 에러 발생');
   }
 }
 
-// 채팅방 나가기
 export function leaveChatRoom() {
   if (socket && currentRoomId) {
     socket.emit('leaveRoom', { roomId: currentRoomId }, (res) => {
-      if (res?.success) {
-        closeSocketConnection();
-      } else {
-        console.error('퇴장 처리 실패:', res?.error);
-      }
+      if (res?.success) closeSocketConnection();
     });
   }
 }

@@ -16,10 +16,6 @@ export class RoomUsersService {
   ) {}
 
   async banUserById(roomId: number, userId: number, owner: any, banReason: string): Promise<void> {
-    // 유효성 체크
-    const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
-    if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
-
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,

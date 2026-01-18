@@ -48,10 +48,19 @@ export class RoomsController {
     return { message: '삭제 되었습니다.' };
   }
 
+  // 방 전체 유저 조회
+  @Get('total-users')
+  async getTotalUsers() {
+    return this.roomsService.getRoomTotalUserCount();
+  }
+
   // 방 전체 조회
   @Get()
-  getAll(@Query('search') search?: string) {
-    return this.roomsService.getAllRooms(search);
+  getAll(
+    @Query('sort') sort: string = 'popular_desc',
+    @Query('search') search?: string,
+  ) {
+    return this.roomsService.getAllRooms(sort, search);
   }
 
   // 방 하나 조회

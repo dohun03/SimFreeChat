@@ -76,6 +76,51 @@ export class RedisService implements OnModuleInit {
     return this.redis.scard(`room:users:${roomId}`);
   }
 
+  // { roomId: 유저 수 }
+  async getRoomUserCountsBulk(roomIds: number[]): Promise<Record<number, number>> {
+    if (roomIds.length === 0) return {};
+
+    const pipeline = this.redis.pipeline();
+    roomIds.forEach((id) => {
+      pipeline.scard(`room:users:${id}`);
+    });
+
+    const results = await pipeline.exec();
+    if (!results) return {};
+
+    const countsMap: Record<number, number> = {};
+    
+    results.forEach(([err, count], index) => {
+      const roomId = roomIds[index];
+      countsMap[roomId] = err ? 0 : Number(count) || 0;
+    });
+
+    return countsMap;
+  }
+
+  async getRoomTotalUserCount(): Promise<number> {
+    try {
+      const keys = await this.redis.keys('room:users:*');
+      if (keys.length === 0) return 0;
+
+      const pipeline = this.redis.pipeline();
+      keys.forEach(key => {
+        pipeline.scard(key);
+      });
+
+      const results = await pipeline.exec();
+      if (!results) return 0;
+
+      return results.reduce((acc, [err, count]) => {
+        if (err) return acc;
+        return acc + (Number(count) || 0);
+      }, 0);
+    } catch (error) {
+      console.error('[Redis] 전체 접속자 수 합산 에러:', error);
+      return 0;
+    }
+  }
+
   async isUserInRoom(roomId: number, userId: number) {
     return this.redis.sismember(`room:users:${roomId}`, userId);
   }
