@@ -68,6 +68,9 @@ export async function renderChatRoom(container, user, roomId) {
           </div>
 
           <div class="d-flex gap-2 flex-shrink-0">
+            <button id="chat-summary-btn" class="btn btn-outline-primary fw-bold btn-sm rounded-3">
+              <i class="bi bi-robot"></i> AI 요약
+            </button>
             <button id="room-edit" class="btn btn-outline-dark fw-bold btn-sm rounded-3 ${isOwner ? '' : 'd-none'}">
               <i class="bi bi-gear-fill"></i> 설정
             </button>
@@ -125,6 +128,7 @@ export async function renderChatRoom(container, user, roomId) {
 
 
 
+      <!-- 유저 정보 모달 -->
       <div class="modal fade" id="userInfoModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-sm">
           <div class="modal-content border-dark border-3 rounded-4 shadow-lg">
@@ -157,6 +161,28 @@ export async function renderChatRoom(container, user, roomId) {
           </div>
         </div>
       </div>
+      
+      <!-- AI 요약 모달 -->
+      <div class="modal fade" id="summaryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+          <div class="modal-content border-primary border-3 rounded-4 shadow-lg">
+            <div class="modal-header bg-light border-0 py-3">
+              <h5 class="modal-title fw-black text-primary">
+                <i class="bi bi-robot me-2"></i>AI 대화 요약 분석
+              </h5>
+              <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+              <div id="summary-content" class="lh-lg text-dark fw-medium p-3 bg-light rounded-4 border border-2 border-dark" 
+                  style="white-space: pre-wrap; font-size: 1.05rem; min-height: 200px;">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+              <button type="button" class="btn btn-dark fw-bold px-4 rounded-3" data-bs-dismiss="modal">확인</button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     const roomName = document.getElementById('room-name');
@@ -173,6 +199,7 @@ export async function renderChatRoom(container, user, roomId) {
     const chatSearchSubmit = document.getElementById('chat-search-submit');
     const chatSearchUp = document.getElementById('search-up');
     const chatSearchDown = document.getElementById('search-down');
+    const chatSummaryBtn = document.getElementById('chat-summary-btn');
     const roomEdit = document.getElementById('room-edit');
     const roomBanManager = document.getElementById('room-ban-manager');
     const leaveRoomBtn = document.getElementById('leave-room-btn');
@@ -613,6 +640,39 @@ export async function renderChatRoom(container, user, roomId) {
 
     chatSearchUp.addEventListener('click', () => { if (searchArray[++searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx--; });
     chatSearchDown.addEventListener('click', () => { if (searchArray[--searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx = 0; });
+
+    // AI 요약 기능
+    const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+    const summaryContent = document.getElementById('summary-content');
+
+    chatSummaryBtn.addEventListener('click', async () => {
+      const originalContent = chatSummaryBtn.innerHTML;
+      chatSummaryBtn.disabled = true;
+      chatSummaryBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> 분석중`;
+
+      try {
+        const res = await fetch(`/api/messages/${roomId}/summary`, {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error('요약 실패');
+        const data = await res.json();
+
+        // 1. 모달 텍스트 영역에 요약 결과 삽입
+        summaryContent.textContent = data.summary;
+        
+        // 2. 모달 띄우기
+        summaryModal.show();
+
+      } catch (err) {
+        console.error('AI 요약 에러:', err);
+        showSystemMessage('AI 요약 중 오류가 발생했습니다.');
+      } finally {
+        chatSummaryBtn.disabled = false;
+        chatSummaryBtn.innerHTML = originalContent;
+      }
+    });
 
     // 간단한 버튼 이벤트
     leaveRoomBtn.addEventListener('click', () => { if (confirm('나갈까요?')) { leaveChatRoom(); window.location.href = '/'; } });

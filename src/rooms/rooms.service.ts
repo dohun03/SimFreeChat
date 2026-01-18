@@ -114,7 +114,6 @@ export class RoomsService {
 
   // 방 전체 조회
   async getAllRooms(sort: string = 'popular_desc', search?: string): Promise<RoomResponseDto[]> {
-    console.log(sort);
     try {
       const where: any = {};
 

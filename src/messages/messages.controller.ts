@@ -23,6 +23,14 @@ export class MessagesController {
     return this.messagesService.getMessageLogMetaData();
   }
 
+  @UseGuards(SessionGuard)
+  @Get('/:roomId/summary')
+  async getAiMessagesSummary(
+    @Param('roomId') roomId: number
+  ) {
+    return this.messagesService.getAiMessagesSummary(roomId);
+  }
+
   @Get('/:roomId')
   async getMessagesByRoom(
     @Param('roomId') roomId: number,

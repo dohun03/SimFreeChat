@@ -7,6 +7,7 @@ import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
 import { RedisService } from 'src/redis/redis.service';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class MessagesService {
@@ -189,6 +190,51 @@ export class MessagesService {
     });
 
     return direction === 'recent' ? result.reverse() : result;
+  }
+  
+  async getAiMessagesSummary(roomId: number) {
+    const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
+    
+    if (!cachedMessages || cachedMessages.length === 0) {
+      return { summary: "요약할 대화 내용이 없습니다." };
+    }
+
+    // 데이터 포맷팅
+    const chatContext = cachedMessages
+      .filter(msg => !msg.isDeleted && msg.type === 'text')
+      .reverse()
+      .map(msg => `${msg.user.name}: ${msg.content}`)
+      .join('\n');
+    if (!chatContext) return { summary: "요약할 수 있는 텍스트 메시지가 없습니다." };
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-3-flash-preview" }
+    );
+
+    // 프롬프트 작성 (데이터 주입)
+    const prompt = `
+      다음은 실시간 채팅방의 대화 내용이다. 
+      사용자들의 대화를 분석해서 다음 형식으로 요약해줘:
+      
+      1. 주제 요약 (한 줄로 핵심만)
+      2. 주요 대화 내용 (누가 어떤 말을 했는지 포함하여 3~5개 불렛포인트)
+      3. 전체적인 분위기 (예: 즐거움, 화남, 평온함 등 한 단어)
+
+      대화 내용:
+      ${chatContext}
+    `;
+
+    try {
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const summaryText = response.text();
+
+      return { summary: summaryText };
+    } catch (error) {
+      console.error(error);
+      return { summary: "AI 요약 중 오류가 발생했습니다." };
+    }
   }
   
   async getAllMessageLogs(
