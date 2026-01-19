@@ -60,12 +60,12 @@ export async function renderAdminUsers(container, user) {
         <table class="table table-hover table-bordered align-middle mb-0">
           <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
             <tr>
-              <th style="width: 7%">ID</th>
+              <th style="width: 8%">ID</th>
               <th>이름</th>
-              <th style="width: 20%">이메일</th>
-              <th style="width: 20%">가입일</th>
-              <th style="width: 10%">권한</th>
-              <th style="width: 10%">상태</th>
+              <th style="width: 25%">이메일</th>
+              <th style="width: 25%">가입일</th>
+              <th style="width: 8%">권한</th>
+              <th style="width: 8%">상태</th>
             </tr>
           </thead>
           <tbody id="user-table-body"></tbody>
@@ -127,7 +127,8 @@ export async function renderAdminUsers(container, user) {
       tr.dataset.id = u.id;
       tr.style.cursor = 'pointer';
       
-      const statusBadge = u.isBanned 
+      const isCurrentlyBanned = u.bannedUntil && new Date(u.bannedUntil) > new Date();
+      const statusBadge = isCurrentlyBanned 
         ? '<strong class="text-danger">Banned</strong>' 
         : '<strong class="text-primary">Active</strong>';
 

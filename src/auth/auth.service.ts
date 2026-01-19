@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Req, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { LoginUserDto } from './dto/login-user.dto';
@@ -25,7 +25,9 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) throw new UnauthorizedException('아이디 또는 비밀번호가 올바르지 않습니다.');
 
-    if (user.isBanned) throw new ForbiddenException('차단 되어있는 사용자입니다.');
+    if (user.bannedUntil && user.bannedUntil > new Date()) {
+      throw new ForbiddenException(`밴 사유: ${user.banReason}`);
+    }
 
     const sessionId = uuid();
     await this.redisService.createSession(sessionId, { 

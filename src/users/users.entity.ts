@@ -18,11 +18,11 @@ export class User {
   @Column({ name: 'is_admin', default: false })
   isAdmin: boolean;
 
-  @Column({ name: 'is_banned', default: false })
-  isBanned: boolean;
+  @Column({ name: 'banned_until', type: 'datetime', nullable: true })
+  bannedUntil: Date | null;
 
-  @Column({ name: 'ban_reason', length: 50, nullable: true })
-  banReason: string;
+  @Column({ type: 'varchar', name: 'ban_reason', length: 50, nullable: true })
+  banReason: string | null;
 
   @OneToMany(() => RoomUser, (roomUser) => roomUser.user)
   roomUsers: RoomUser[];

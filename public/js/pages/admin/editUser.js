@@ -9,91 +9,162 @@ export async function renderEditUser(container, user, userId) {
   try {
     const res = await fetch(`/api/users/${userId}`, { method: 'GET' });
     if (!res.ok) throw new Error('유저 데이터를 불러오는 중 오류 발생');
-    
-    const userData = await res.json();
+    const user = await res.json();
+
+    const isCurrentlyBanned = user.bannedUntil && new Date(user.bannedUntil) > new Date();
+    const isPermanent = user.bannedUntil && new Date(user.bannedUntil).getFullYear() >= 2099;
 
     container.innerHTML = `
-    <div class="card p-4 mx-auto" style="max-width: 600px;">
-      <h2>${userData.name}님의 프로필 설정</h2>
-      <form id="profile-form">
-        <input type="text" id="name" placeholder="현재 아이디: ${userData.name}" class="form-control mb-2" />
-        <input type="email" id="email" placeholder="현재 이메일: ${userData.email}" class="form-control mb-2" />
-        <input type="password" id="password" placeholder="새 비밀번호" class="form-control mb-2" />
-        <input type="password" id="confirmPassword" placeholder="비밀번호 확인" class="form-control mb-2" />
-        <div class="d-flex gap-2">
-          <button type="submit" class="btn btn-primary flex-fill btn-sm">저장</button>
-          <button type="button" class="btn btn-danger flex-fill btn-sm" id="delete-btn">삭제</button>
+    <div class="container mt-4" style="max-width: 800px;">
+      <div class="card shadow-sm p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h2 class="mb-0 fw-bold">${user.name} 관리</h2>
+          ${isCurrentlyBanned 
+            ? `<span class="badge bg-danger fs-6">현재 밴 상태 (${isPermanent ? '영구' : '기간제'})</span>` 
+            : '<span class="badge bg-success fs-6">정상 상태</span>'}
         </div>
-      </form>
-      <p id="profile-msg" class="text-danger mt-2"></p>
-      <div class="mt-3 text-muted small">
-        <p>가입일: ${formatDate(userData.createdAt)}</p>
-        <p>최근 수정일: ${userData.createdAt !== userData.updatedAt ? formatDate(userData.updatedAt) : '없음'}</p>
+
+        <div class="row g-4">
+          <div class="col-md-6 border-end">
+            <h5 class="mb-3 text-muted">프로필 수정</h5>
+            <form id="profile-form">
+              <div class="mb-2">
+                <label class="small text-muted">이름</label>
+                <input type="text" id="name" placeholder="${user.name}" class="form-control form-control-sm" />
+              </div>
+              <div class="mb-2">
+                <label class="small text-muted">이메일</label>
+                <input type="email" id="email" placeholder="${user.email}" class="form-control form-control-sm" />
+              </div>
+              <div class="mb-2">
+                <label class="small text-muted">새 비밀번호</label>
+                <input type="password" id="password" class="form-control form-control-sm" placeholder="변경 시에만 입력" />
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm w-100 mt-2">프로필 저장</button>
+            </form>
+          </div>
+
+          <div class="col-md-6">
+            <h5 class="mb-3 text-muted">계정 상태 제어</h5>
+            <div class="p-3 bg-light rounded shadow-sm">
+              <div class="mb-3">
+                <label class="form-label small fw-bold">밴 기간 설정</label>
+                <select id="ban-days" class="form-select form-select-sm">
+                  <option value="">[밴 기간]</option>
+                  <option value="1">1일 정지</option>
+                  <option value="7">7일 정지</option>
+                  <option value="30">30일 정지</option>
+                  <option value="9999">영구 정지</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">밴 사유</label>
+                <input id="ban-reason" class="form-control form-control-sm" value="${user.banReason || ''}">
+              </div>
+              <div class="d-flex gap-2">
+                <button id="ban-btn" class="btn ${isCurrentlyBanned ? 'btn-warning' : 'btn-danger'} btn-sm flex-fill">
+                  ${isCurrentlyBanned ? '밴 정보 변경' : '계정 밴 하기'}
+                </button>
+                ${isCurrentlyBanned ? `<button id="unban-btn" class="btn btn-success btn-sm flex-fill">밴 해제</button>` : ''}
+              </div>
+              ${isCurrentlyBanned && !isPermanent ? `<div class="mt-2 small text-danger text-center">만료 예정: ${formatDate(user.bannedUntil)}</div>` : ''}
+            </div>
+
+            <div class="mt-4 pt-3 border-top">
+              <button id="delete-btn" class="btn btn-outline-danger btn-sm w-100">계정 영구 삭제</button>
+            </div>
+          </div>
+        </div>
+        <p id="profile-msg" class="text-center mt-3 small"></p>
       </div>
     </div>
-  `;
+    `;
+
+    setupEventListeners(userId);
   } catch (err) {
     console.error(err);
+    container.innerHTML = '<h2 class="text-center mt-5">유저 정보를 불러올 수 없습니다.</h2>';
   }
+}
 
-  const form = document.getElementById('profile-form');
-  const profileMsg = document.getElementById('profile-msg');
-  const deleteBtn = document.getElementById('delete-btn');
+function setupEventListeners(userId) {
+  const msg = document.getElementById('profile-msg');
 
-  // 프로필 수정 이벤트
-  form.addEventListener('submit', async (e) => {
+  // 프로필 수정
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const payload = {};
     const name = document.getElementById('name').value;
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
 
-    if (password && password !== confirmPassword) {
-      profileMsg.innerText = '비밀번호 불일치';
-      return;
-    }
-
-    const payload = {};
     if (name) payload.name = name;
     if (email) payload.email = email;
     if (password) payload.password = password;
 
-    try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        profileMsg.innerText = '저장 완료';
-      } else {
-        profileMsg.innerText = data.message || '저장 실패';
-      }
-    } catch {
-      profileMsg.innerText = '서버 오류';
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) { 
+      msg.className = 'text-success mt-3'; 
+      msg.innerText = '프로필이 저장되었습니다.'; 
     }
   });
 
-  // 유저 삭제 이벤트
-  deleteBtn.addEventListener('click', async () => {
-    if (confirm('정말 삭제하시겠습니까?')) {
-      try {
-        const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
-        const data = await res.json();
+  // 밴 적용/수정 
+  document.getElementById('ban-btn').addEventListener('click', async () => {
+    const banDays = document.getElementById('ban-days').value;
+    const reason = document.getElementById('ban-reason').value;
 
-        if (!res.ok) {
-          profileMsg.innerText = data.message || '유저 삭제 실패';
-          return;
-        }
+    if (!banDays) return alert('밴 기간을 설정하세요.');
+    if (!reason) return alert('사유를 입력해 주세요.');
 
-        alert(data.message || '삭제 완료');
-        history.pushState(null, '', '/admin');
-        await router();
-      } catch (err) {
-        console.error(err);
-        profileMsg.innerText = '서버 오류';
+    const res = await fetch(`/api/users/${userId}/ban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, banDays: parseInt(banDays) }),
+    });
+
+    if (res.ok) {
+      alert('밴 설정이 완료되었습니다.');
+      location.reload();
+    } else {
+      const errorData = await res.json();
+
+      let finalMsg = '';
+      if (Array.isArray(errorData.message)) {
+        finalMsg = errorData.message.join('\n');
+      } else {
+        finalMsg = errorData.message || '알 수 없는 오류가 발생했습니다.';
+      }
+
+      alert(`요청 실패: ${finalMsg}`);
+    }
+  });
+
+  // 밴 해제
+  const unbanBtn = document.getElementById('unban-btn');
+  if (unbanBtn) {
+    unbanBtn.addEventListener('click', async () => {
+      if (!confirm('밴을 해제하시겠습니까?')) return;
+      const res = await fetch(`/api/users/${userId}/ban`, { method: 'DELETE' });
+      if (res.ok) { 
+        alert('밴이 해제되었습니다.'); 
+        location.reload(); 
+      }
+    });
+  }
+
+  // 유저 삭제
+  document.getElementById('delete-btn').addEventListener('click', async () => {
+    if (confirm('이 계정을 완전히 삭제하시겠습니까?')) {
+      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) { 
+        alert('삭제되었습니다.'); 
+        history.pushState(null, '', '/admin'); 
+        router(); 
       }
     }
   });

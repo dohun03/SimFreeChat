@@ -49,14 +49,15 @@ export class SocketService {
       where: { id: userId }
     });
     if (!joinUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
+    if (joinUser.bannedUntil && joinUser.bannedUntil > new Date()) throw new UnauthorizedException(`이용이 정지된 계정입니다. 사유:  ${joinUser.banReason}`);
 
-    const banUser = await this.roomUserRepository.findOne({
+    const bannedUser = await this.roomUserRepository.findOne({
       where: {
         room: { id: roomId },
         user: { id: userId },
       },
     });
-    if (banUser?.isBanned) throw new BadRequestException(`이 방에서 밴 처리된 사용자입니다: ${banUser.banReason}`);
+    if (bannedUser?.isBanned) throw new BadRequestException(`이 방에서 밴 처리된 사용자입니다: ${bannedUser.banReason}`);
     
     await this.redisService.addUserToRoom(roomId, userId);
 

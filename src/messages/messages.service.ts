@@ -60,7 +60,7 @@ export class MessagesService {
         }),
         this.userRepository.findOne({ 
           where: { id: userId },
-          select: ['id', 'name', 'isAdmin', 'isBanned', 'createdAt', 'updatedAt']
+          select: ['id', 'name', 'isAdmin', 'bannedUntil', 'createdAt', 'updatedAt']
         }),
       ]);
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
@@ -84,7 +84,7 @@ export class MessagesService {
           id: user.id,
           name: user.name,
           isAdmin: user.isAdmin,
-          isBanned: user.isBanned,
+          bannedUntil: user.bannedUntil,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
         },

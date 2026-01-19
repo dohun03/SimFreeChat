@@ -21,6 +21,15 @@ export async function renderChatRoom(container, user, roomId) {
     return;
   }
 
+  const bannedUntil = new Date(user.bannedUntil);
+  const now = new Date();
+  if (bannedUntil && bannedUntil > now) {
+    alert(`이용이 정지된 계정입니다. 사유: ${user.banReason}`);
+    history.pushState(null, '', '/');
+    await router();
+    return;
+  }
+
   roomId = Number(roomId);
   currentRoomId = roomId;
 
@@ -30,7 +39,7 @@ export async function renderChatRoom(container, user, roomId) {
   });
 
   try {
-    // 1. 방 및 유저 정보 조회
+    // 방 및 유저 정보 조회
     const roomRes = await fetch(`/api/rooms/${roomId}`, { method: 'GET', credentials: 'include' });
     if (!roomRes.ok) { container.textContent = '방 정보를 가져올 수 없습니다.'; return; }
     const room = await roomRes.json();
@@ -249,9 +258,7 @@ export async function renderChatRoom(container, user, roomId) {
       }
 
       li.innerHTML = `
-        <div class="small fw-black mb-1 px-2 text-dark opacity-75 user-info-trigger" 
-             style="font-size: 0.8rem; cursor: pointer;" 
-             data-id="${msg.user.id}">
+        <div class="fw-black mb-1 px-2 text-dark opacity-75 user-info-trigger" style="cursor: pointer;" data-id="${msg.user.id}">
           ${escapeHtml(msg.user.name)}
         </div>
 
@@ -445,7 +452,7 @@ export async function renderChatRoom(container, user, roomId) {
         bubble.classList.remove('bg-dark', 'text-white', 'bg-white', 'text-dark');
         bubble.classList.add('bg-light', 'text-muted', 'border-secondary', 'opacity-75');
         
-        bubble.innerHTML = `<span class="fw-bold small fst-italic text-secondary">삭제된 메시지입니다.</span>`;
+        bubble.innerHTML = `<span class="fw-bold fst-italic text-secondary">삭제된 메시지입니다.</span>`;
         
         if (deleteBtn) deleteBtn.remove();
       }

@@ -77,15 +77,20 @@ export class UsersService {
     if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
     const qb = this.userRepository.createQueryBuilder('u');
+    const now = new Date();
 
     if (search) {
       qb.andWhere('(u.name LIKE :search OR u.email LIKE :search)', { search: `%${search}%` });
     }
+
     if (isAdmin === 'true' || isAdmin === 'false') {
       qb.andWhere('u.isAdmin = :isAdmin', { isAdmin: isAdmin === 'true' });
     }
-    if (isBanned === 'true' || isBanned === 'false') {
-      qb.andWhere('u.isBanned = :isBanned', { isBanned: isBanned === 'true' });
+
+    if (isBanned === 'true') {
+      qb.andWhere('u.bannedUntil > :now', { now });
+    } else if (isBanned === 'false') {
+      qb.andWhere('(u.bannedUntil IS NULL OR u.bannedUntil <= :now)', { now });
     }
 
     const totalCount = await qb.getCount();
@@ -94,7 +99,7 @@ export class UsersService {
       .orderBy('u.id', 'DESC')
       .skip(offset)
       .take(limit)
-      .select(['u.id', 'u.name', 'u.email', 'u.isAdmin', 'u.isBanned', 'u.createdAt'])
+      .select(['u.id', 'u.name', 'u.email', 'u.isAdmin', 'u.bannedUntil', 'u.banReason', 'u.createdAt'])
       .getMany();
 
     return {
@@ -225,5 +230,44 @@ export class UsersService {
       console.error('DB 삭제 에러:', err);
       throw new InternalServerErrorException('사용자 삭제 중 문제가 발생했습니다.');
     }
+  }
+
+  // 밴 처리 전용 메서드 추가 (별도로 만드는 게 깔끔합니다)
+  async banUserById(adminId: number, userId: number, data: { reason: string, banDays: number }) {
+    const admin = await this.userRepository.findOne({ where: { id: adminId } });
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('유저를 찾을 수 없습니다.');
+    if (user.isAdmin) throw new ForbiddenException('관리자는 밴 할 수 없습니다.');
+
+    let bannedUntil: Date;
+
+    if (data.banDays === 9999) {
+      bannedUntil = new Date('2099-12-31T23:59:59');
+    } else {
+      bannedUntil = new Date();
+      bannedUntil.setDate(bannedUntil.getDate() + data.banDays);
+    }
+
+    await this.userRepository.update(userId, {
+      bannedUntil,
+      banReason: data.reason
+    });
+
+    return { message: '밴 설정 완료' };
+  }
+
+  // 밴 해제 메서드 추가
+  async unbanUserById(adminId: number, userId: number) {
+    const admin = await this.userRepository.findOne({ where: { id: adminId } });
+    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+
+    await this.userRepository.update(userId, {
+      bannedUntil: null,
+      banReason: null
+    });
+
+    return { message: '밴 해제 완료' };
   }
 }
