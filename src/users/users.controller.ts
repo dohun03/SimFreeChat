@@ -35,9 +35,9 @@ export class UsersController {
   @Get()
   async getAll(
     @Req() req: any,
-    @Query('search') search?: string
+    @Query() query: any
   ) {
-    return this.usersService.getAll(req.user.userId, search);
+    return this.usersService.getAllUsers(req.user.userId, query);
   }
 
   @UseGuards(SessionGuard)

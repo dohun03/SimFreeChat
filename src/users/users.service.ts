@@ -68,26 +68,39 @@ export class UsersService {
   }
 
   // 모든 사용자 조회 (관리자)
-  async getAll(userId: number, search?: string): Promise<User[]> {
-    const admin = await this.userRepository.findOne({
-      where: { id: userId }
-    });
+  async getAllUsers(userId: number, query: any) {
+    const { search, isAdmin, isBanned } = query;
+    const limit = query.limit ? parseInt(query.limit) : 50;
+    const offset = query.offset ? parseInt(query.offset) : 0;
+
+    const admin = await this.userRepository.findOne({ where: { id: userId } });
     if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
-    const where = search
-    ? [
-        { name: Like(`%${search}%`) },
-        { email: Like(`%${search}%`) }
-      ]
-    : undefined;
+    const qb = this.userRepository.createQueryBuilder('u');
 
-    const users = await this.userRepository.find({
-      where,
-      select: ['id', 'name', 'email', 'isAdmin', 'createdAt', 'updatedAt']
-    });
-    if (!users) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    if (search) {
+      qb.andWhere('(u.name LIKE :search OR u.email LIKE :search)', { search: `%${search}%` });
+    }
+    if (isAdmin === 'true' || isAdmin === 'false') {
+      qb.andWhere('u.isAdmin = :isAdmin', { isAdmin: isAdmin === 'true' });
+    }
+    if (isBanned === 'true' || isBanned === 'false') {
+      qb.andWhere('u.isBanned = :isBanned', { isBanned: isBanned === 'true' });
+    }
 
-    return users;
+    const totalCount = await qb.getCount();
+
+    const users = await qb
+      .orderBy('u.id', 'DESC')
+      .skip(offset)
+      .take(limit)
+      .select(['u.id', 'u.name', 'u.email', 'u.isAdmin', 'u.isBanned', 'u.createdAt'])
+      .getMany();
+
+    return {
+      users,
+      totalCount,
+    };
   }
 
   // 본인 프로필 수정하기

@@ -6,36 +6,66 @@ export async function renderAdminUsers(container, user) {
     return;
   }
 
+  // 상태 관리 (Offset 기반으로 변경)
+  const state = {
+    currentPage: 1,
+    total: 0,
+    limit: 50
+  };
+
   container.innerHTML = `
     <div class="container mt-4">
-      <h2 class="mb-3">유저 관리</h2>
+      <h2 class="mb-3 fw-bold">유저 관리</h2>
 
-      <!-- 검색창 -->
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <div class="input-group">
-            <input type="text" id="user-search" class="form-control" placeholder="유저 검색 (이름, 이메일)">
+      <div class="d-flex justify-content-between align-items-end mb-3 flex-wrap gap-2">
+        <div class="d-flex flex-column gap-2">
+          <div class="input-group input-group-sm" style="max-width: 400px;">
+            <input type="text" id="user-search" class="form-control" placeholder="이름 또는 이메일 검색">
             <button class="btn btn-primary" id="search-btn">검색</button>
           </div>
+          <div class="d-flex gap-2">
+            <select id="admin-filter" class="form-select form-select-sm" style="width: 130px;">
+              <option value="">[권한 필터]</option>
+              <option value="true">관리자</option>
+              <option value="false">일반 사용자</option>
+            </select>
+            <select id="ban-filter" class="form-select form-select-sm" style="width: 130px;">
+              <option value="">[밴 여부]</option>
+              <option value="true">밴 처리됨</option>
+              <option value="false">정상</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="d-flex flex-column align-items-end gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <select id="line-limit" class="form-select form-select-sm" style="width: 100px;">
+              <option value="50">50줄</option>
+              <option value="100">100줄</option>
+              <option value="300">300줄</option>
+            </select>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item"><button class="page-link" id="prev-page">«</button></li>
+                <li class="page-item"><span class="page-link px-3" id="current-page-info">1</span></li>
+                <li class="page-item"><button class="page-link" id="next-page">»</button></li>
+              </ul>
+            </nav>
+          </div>
+          <span id="total-user-count" class="fw-bold text-primary">총 유저: 0명</span>
         </div>
       </div>
 
-      <!-- 유저 테이블 (스크롤형) -->
-      <div class="table-responsive" 
-           style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 6px;">
+      <div class="table-responsive" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
         <table class="table table-hover table-bordered align-middle mb-0">
-          <col style="width: 5%">
-          <col>
-          <col style="width: 30%">
-          <col style="width: 220px">
-          <col style="width: 100px">
           <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
             <tr>
-              <th>ID</th>
+              <th style="width: 7%">ID</th>
               <th>이름</th>
-              <th>이메일</th>
-              <th>가입일</th>
-              <th>권한</th>
+              <th style="width: 20%">이메일</th>
+              <th style="width: 20%">가입일</th>
+              <th style="width: 10%">권한</th>
+              <th style="width: 10%">상태</th>
             </tr>
           </thead>
           <tbody id="user-table-body"></tbody>
@@ -47,56 +77,114 @@ export async function renderAdminUsers(container, user) {
   const userTableBody = document.getElementById('user-table-body');
   const searchInput = document.getElementById('user-search');
   const searchBtn = document.getElementById('search-btn');
+  const adminFilter = document.getElementById('admin-filter');
+  const banFilter = document.getElementById('ban-filter');
+  const lineLimit = document.getElementById('line-limit');
+  const totalUserCount = document.getElementById('total-user-count');
+  const currentPageInfo = document.getElementById('current-page-info');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
 
-  async function renderTable(search = '') {
+  async function loadUsers() {
     try {
-      const res = await fetch(`/api/users?search=${encodeURIComponent(search)}`, {
+      const offset = (state.currentPage - 1) * state.limit;
+
+      const params = new URLSearchParams({
+        search: searchInput.value.trim(),
+        isAdmin: adminFilter.value,
+        isBanned: banFilter.value,
+        limit: state.limit,
+        offset: offset
+      });
+
+      const res = await fetch(`/api/users?${params.toString()}`, {
         method: 'GET',
         credentials: 'include',
       });
+      
       if (!res.ok) throw new Error('유저 데이터를 불러오는 중 오류 발생');
       
-      const users = await res.json();
-      userTableBody.innerHTML = '';
-
-      users.forEach((user) => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = user.id;
-        tr.innerHTML = `
-          <td>${user.id}</td>
-          <td>${user.name}</td>
-          <td>${user.email}</td>
-          <td>${formatDate(user.createdAt)}</td>
-          <td>${user.isAdmin ? '<b>관리자</b>' : '사용자'}</td>
-        `;
-        userTableBody.appendChild(tr);
-      });
+      const { users, totalCount } = await res.json();
+      
+      state.total = totalCount;
+      renderTable(users);
+      updateUI();
     } catch (err) {
       console.error(err);
+      userTableBody.innerHTML = '<tr><td colspan="6" class="text-danger">데이터 로드 실패</td></tr>';
     }
   }
 
+  function renderTable(users) {
+    userTableBody.innerHTML = '';
+    if (!users || users.length === 0) {
+      userTableBody.innerHTML = '<tr><td colspan="6" class="py-4 text-muted">유저가 없습니다.</td></tr>';
+      return;
+    }
+
+    users.forEach((u) => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = u.id;
+      tr.style.cursor = 'pointer';
+      
+      const statusBadge = u.isBanned 
+        ? '<strong class="text-danger">Banned</strong>' 
+        : '<strong class="text-primary">Active</strong>';
+
+      tr.innerHTML = `
+        <td>${u.id}</td>
+        <td class="fw-bold">${u.name}</td>
+        <td>${u.email}</td>
+        <td>${formatDate(u.createdAt)}</td>
+        <td>${u.isAdmin ? '<span class="text-primary fw-bold">관리자</span>' : '사용자'}</td>
+        <td>${statusBadge}</td>
+      `;
+      userTableBody.appendChild(tr);
+    });
+  }
+
+  function updateUI() {
+    totalUserCount.textContent = `총 유저: ${state.total.toLocaleString()}명`;
+    const totalPages = Math.ceil(state.total / state.limit) || 1;
+    currentPageInfo.textContent = `${state.currentPage} / ${totalPages}`;
+  }
+
+  function goPage(direction) {
+    const totalPages = Math.ceil(state.total / state.limit);
+    if (direction === 'prev' && state.currentPage > 1) {
+      state.currentPage--;
+      loadUsers();
+    } else if (direction === 'next' && state.currentPage < totalPages) {
+      state.currentPage++;
+      loadUsers();
+    }
+  }
+
+  // 검색이나 필터 변경 시 1페이지로 리셋
+  const resetAndLoad = () => {
+    state.currentPage = 1;
+    loadUsers();
+  };
+
+  searchBtn.addEventListener('click', resetAndLoad);
+  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') resetAndLoad(); });
+  
+  [adminFilter, banFilter].forEach(el => el.addEventListener('change', resetAndLoad));
+
+  lineLimit.addEventListener('change', (e) => {
+    state.limit = parseInt(e.target.value);
+    resetAndLoad();
+  });
+
+  prevPageBtn.addEventListener('click', () => goPage('prev'));
+  nextPageBtn.addEventListener('click', () => goPage('next'));
+
   userTableBody.addEventListener('click', (e) => {
     const tr = e.target.closest('tr');
-    if (!tr) return; // tr 이 아닌 영역 클릭 시 무시
-  
-    const userId = tr.dataset.id;
-    console.log('클릭한 유저 ID:', userId);
-    
-    history.pushState(null, '', `/admin/user/${userId}`);
+    if (!tr) return;
+    history.pushState(null, '', `/admin/user/${tr.dataset.id}`);
     router();
   });
 
-  searchBtn.addEventListener('click', () => {
-    renderTable(searchInput.value);
-  });
-
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      renderTable(searchInput.value);
-    }
-  });
-
-  renderTable();
+  loadUsers();
 }

@@ -675,7 +675,7 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // 간단한 버튼 이벤트
-    leaveRoomBtn.addEventListener('click', () => { if (confirm('나갈까요?')) { leaveChatRoom(); window.location.href = '/'; } });
+    leaveRoomBtn.addEventListener('click', () => { window.location.href = '/'; } );
     roomEdit.addEventListener('click', () => window.open(`/edit-room/${roomId}`, '_blank'));
     roomBanManager.addEventListener('click', () => window.open(`/room/${roomId}/ban-manager`, '_blank'));
     chatReset.addEventListener('click', () => { chatInput.value = ''; chatInput.style.height = '58px'; });
