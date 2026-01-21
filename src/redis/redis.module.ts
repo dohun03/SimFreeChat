@@ -16,6 +16,10 @@ import { MessageLog } from 'src/messages/message-logs.entity';
       useFactory: (config: ConfigService) => ({
         type: 'single',
         url: `redis://${config.get<string>('REDIS_HOST')}:${config.get<number>('REDIS_PORT')}`,
+        options: {
+          maxRetriesPerRequest: null,
+          retryStrategy: (times) => Math.min(times * 100, 3000),
+        },
       }),
       inject: [ConfigService],
     }),

@@ -1,4 +1,3 @@
-import { RedisModule } from '@nestjs-modules/ioredis';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
@@ -11,7 +10,6 @@ import { MessagesService } from './messages.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message, MessageLog, Room, User]),
-    RedisModule
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

@@ -37,7 +37,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  await app.listen(process.env.PORT ?? 4000, '127.0.0.1');
+  await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 
   console.log(`server is running 22 ${process.env.SOCKET_ORIGIN}`);
 }

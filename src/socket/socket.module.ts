@@ -1,7 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { SocketGateway } from './socket.gateway';
 import { SocketService } from './socket.service';
-import { RedisGlobalModule } from '../redis/redis.module';
 import { User } from 'src/users/users.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SocketEvents } from './socket.events';
@@ -14,7 +13,6 @@ import { RoomUser } from 'src/room-users/room-user.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Room, RoomUser]),
-    RedisGlobalModule,
     MessagesModule,
     RoomUsersModule,
     forwardRef(() => RoomsModule),
