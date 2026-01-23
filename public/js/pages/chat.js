@@ -192,6 +192,26 @@ export async function renderChatRoom(container, user, roomId) {
           </div>
         </div>
       </div>
+
+      <!-- 이미지 로드 모달 -->
+      <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+          <div class="modal-content border-0" style="background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px);">
+            <div class="modal-body p-0 d-flex align-items-center justify-content-center" style="min-height: 500px; position: relative;">
+              
+              <button type="button" 
+                      class="btn-close btn-close-white position-absolute top-0 end-0 m-4" 
+                      data-bs-dismiss="modal" 
+                      style="z-index: 1060; width: 2em; height: 2em;"></button>
+              
+              <img src="" id="modalImage" 
+                  class="img-fluid rounded shadow-2xl" 
+                  style="max-height: 90vh; object-fit: contain; border: 1px solid rgba(255,255,255,0.1);">
+                  
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     const roomName = document.getElementById('room-name');
@@ -215,7 +235,7 @@ export async function renderChatRoom(container, user, roomId) {
     const chatUploadBtn = document.getElementById('chat-upload-btn');
     const chatUploadInput = document.getElementById('chat-upload-input');
 
-    // 기능 로직 함수들
+    // [ 기능 로직 함수들 ]
     function showSystemMessage(message) {
       const systemContainer = document.getElementById('system-alerts');
       if (!systemContainer) return;
@@ -252,9 +272,16 @@ export async function renderChatRoom(container, user, roomId) {
         contentHtml = `<span class="fw-bold small fst-italic text-secondary">삭제된 메시지입니다.</span>`;
         bubbleClass = 'bg-light text-muted border-secondary opacity-75';
       } else {
-        contentHtml = (msg.type === 'image' ? 
-          `<img src="/uploads/images/${msg.content}" class="img-fluid rounded-3 border border-dark" style="max-height:450px;">` : 
-          escapeHtml(msg.content));
+        if (msg.type === 'image') {
+          const thumbName = msg.content.replace(/\.[^/.]+$/, ".webp");
+          contentHtml = `<img src="/uploads/images/thumb-${thumbName}" 
+                              class="img-fluid rounded-3 border border-dark chat-img-clickable" 
+                              style="max-height:450px; cursor:zoom-in;"
+                              data-origin="${msg.content}"
+                              onerror="this.src='/uploads/images/${msg.content}'">`;
+        } else {
+          contentHtml = escapeHtml(msg.content);
+        }
       }
 
       li.innerHTML = `
@@ -278,7 +305,7 @@ export async function renderChatRoom(container, user, roomId) {
       return li;
     }
 
-    // 메시지 개수 제한 (기존 로직 유지)
+    // # 메시지 개수 제한
     function keepMessageLimit(direction = 'recent') {
       const limit = 200;
       const currentLength = messagesList.children.length;
@@ -306,7 +333,7 @@ export async function renderChatRoom(container, user, roomId) {
       });
     }
 
-    // 메시지 로드 (API 요청)
+    // # 메시지 로드 (API 요청)
     async function loadMessages(direction = 'init') {
       if (loading) return;
       loading = true;
@@ -367,7 +394,7 @@ export async function renderChatRoom(container, user, roomId) {
     }
     loadMessages('init');
 
-    // 소켓 이벤트 바인딩
+    // [ 소켓 이벤트 바인딩 ]
     socket.emit('joinRoom', { roomId, password: room.password && !isOwner ? prompt('비밀번호를 입력하세요') : undefined });
 
     socket.on('roomEvent', data => {
@@ -395,7 +422,6 @@ export async function renderChatRoom(container, user, roomId) {
       currentCount.textContent = data.roomUserCount;
     });
 
-    // [방 정보 수정 반영]
     socket.on('roomUpdated', data => {
       showSystemMessage(data.msg);
       roomName.textContent = data.room.name;
@@ -406,7 +432,6 @@ export async function renderChatRoom(container, user, roomId) {
       alert(`서버 알림: ${data.message}`);
     });
 
-    // [강제 퇴장 이벤트 처리]
     socket.on('forcedDisconnect', (data) => {
       showErrorMessage(`연결 끊김: ${data.msg}`);
       closeSocketConnection();
@@ -458,16 +483,27 @@ export async function renderChatRoom(container, user, roomId) {
       }
     });
 
-    // 이벤트 리스너
+    // [ 이벤트 리스너 ]
+
+    // # 메시지 전송
     chatSubmit.addEventListener('click', () => {
       if (!chatInput.value.trim()) return;
       socket.emit('sendMessage', { roomId, content: chatInput.value, type: 'text' });
       chatInput.value = '';
       chatInput.style.height = '58px';
     });
-
     chatInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSubmit.click(); } });
 
+    // # 메시지 삭제
+    messagesList.addEventListener('click', e => {
+      const btn = e.target.closest('.delete-btn');
+      if (btn && confirm('삭제하시겠습니까?')) {
+        const id = btn.closest('.chat-message').dataset.id;
+        socket.emit('deleteMessage', { roomId, messageId: id });
+      }
+    });
+
+    // # 스크롤 감지
     function isAtTop(scrollGap = 50) {
       return chatMessages.scrollTop <= scrollGap;
     }
@@ -517,39 +553,99 @@ export async function renderChatRoom(container, user, roomId) {
     }
 
     newMessageAlert.addEventListener('click', async () => {
-      messagesList.innerHTML = ''; 
+      messagesList.innerHTML = '';
       await loadMessages('init');
       
       scrollToBottom();
       hideNewMessageAlert();
     });
 
+    // # 이미지 전송
     chatUploadBtn.addEventListener('click', () => chatUploadInput.click());
     chatUploadInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
+      // webp 썸네일 생성
+      const thumbnailBlob = await createThumbnail(file);
+
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('thumbnail', thumbnailBlob);
 
       try {
         const res = await fetch('/api/uploads', { method: 'POST', body: formData, credentials: 'include' });
+        
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.message || '업로드 실패');
+        }
+
         const data = await res.json();
+
         socket.emit('sendMessage', { roomId, content: data.filename, type: 'image' });
       } catch (err) {
-        alert('업로드 실패');
+        console.error(err);
+        alert('이미지 업로드에 실패했습니다.');
+      } finally {
+        e.target.value = '';
       }
     });
 
-    messagesList.addEventListener('click', e => {
-      const btn = e.target.closest('.delete-btn');
-      if (btn && confirm('삭제하시겠습니까?')) {
-        const id = btn.closest('.chat-message').dataset.id;
-        socket.emit('deleteMessage', { roomId, messageId: id });
+    // Canvas 리사이징 함수
+    async function createThumbnail(file, maxUnit = 200) { // 긴 쪽을 200px로!
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // 비율 계산: 가로/세로 중 더 긴 쪽을 maxUnit(200)에 맞춤
+          if (width > height) {
+            if (width > maxUnit) {
+              height *= maxUnit / width;
+              width = maxUnit;
+            }
+          } else {
+            if (height > maxUnit) {
+              width *= maxUnit / height;
+              height = maxUnit;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(img.src);
+            resolve(blob);
+          }, 'image/webp', 0.5);
+        };
+      });
+    }
+
+    // 이미지 모달 로드 이벤트
+    const imageModal = new bootstrap.Modal(document.getElementById('imageModal'));
+    const modalImage = document.getElementById('modalImage');
+
+    document.getElementById('chat-messages').addEventListener('click', (e) => {
+      // 클릭한 요소가 chat-img-clickable 클래스를 가지고 있는지 확인
+      if (e.target.classList.contains('chat-img-clickable')) {
+        const originName = e.target.dataset.origin; // 심어둔 원본 파일명 가져오기
+        modalImage.src = `/uploads/images/${originName}`; // 원본 이미지 경로 설정
+        imageModal.show();
       }
     });
 
-    // [강퇴/밴/정보 버튼 위임 이벤트]
+    // # 강퇴/밴/정보 로직
     userList.addEventListener('click', async (e) => {
       const targetId = Number(e.target.dataset.id);
       if (!targetId) return;
@@ -568,6 +664,7 @@ export async function renderChatRoom(container, user, roomId) {
         }
       }
     });
+
     // 유저 정보 모달 연동
     const userModal = new bootstrap.Modal(document.getElementById('userInfoModal'));
 
@@ -623,7 +720,7 @@ export async function renderChatRoom(container, user, roomId) {
       if (infoBtn) openUserInfoModal(infoBtn.dataset.id);
     });
 
-    // 검색 기능
+    // # 검색 기능
     let searchArray = [];
     let searchIdx = 0;
     chatSearchSubmit.addEventListener('click', async () => {
@@ -648,7 +745,7 @@ export async function renderChatRoom(container, user, roomId) {
     chatSearchUp.addEventListener('click', () => { if (searchArray[++searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx--; });
     chatSearchDown.addEventListener('click', () => { if (searchArray[--searchIdx]) highlight(searchArray[searchIdx].id); else searchIdx = 0; });
 
-    // AI 요약 기능
+    // # AI 요약 기능
     const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
     const summaryContent = document.getElementById('summary-content');
 
@@ -681,7 +778,7 @@ export async function renderChatRoom(container, user, roomId) {
       }
     });
 
-    // 간단한 버튼 이벤트
+    // # 기타 버튼 이벤트
     leaveRoomBtn.addEventListener('click', () => { window.location.href = '/'; } );
     roomEdit.addEventListener('click', () => window.open(`/edit-room/${roomId}`, '_blank'));
     roomBanManager.addEventListener('click', () => window.open(`/room/${roomId}/ban-manager`, '_blank'));

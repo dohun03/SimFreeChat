@@ -5,6 +5,7 @@
 
 # 로컬/서버 데이터
 /redis-data
+/redis-data-dev
 /uploads
 /traffic_test
 

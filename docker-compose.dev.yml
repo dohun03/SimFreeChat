@@ -40,7 +40,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./redis-data-dev:/data # 개발용 데이터 분리
+      - ./redis-data:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
