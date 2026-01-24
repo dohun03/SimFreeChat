@@ -274,11 +274,11 @@ export async function renderChatRoom(container, user, roomId) {
       } else {
         if (msg.type === 'image') {
           const thumbName = msg.content.replace(/\.[^/.]+$/, ".webp");
-          contentHtml = `<img src="/uploads/images/thumb-${thumbName}" 
+          contentHtml = `<img src="/uploads/rooms/${roomId}/thumb-${thumbName}" 
                               class="img-fluid rounded-3 border border-dark chat-img-clickable" 
                               style="max-height:450px; cursor:zoom-in;"
                               data-origin="${msg.content}"
-                              onerror="this.src='/uploads/images/${msg.content}'">`;
+                              onerror="this.src='/uploads/rooms/${roomId}/${msg.content}'">`;
         } else {
           contentHtml = escapeHtml(msg.content);
         }
@@ -574,7 +574,7 @@ export async function renderChatRoom(container, user, roomId) {
       formData.append('thumbnail', thumbnailBlob);
 
       try {
-        const res = await fetch('/api/uploads', { method: 'POST', body: formData, credentials: 'include' });
+        const res = await fetch(`/api/uploads/${roomId}`, { method: 'POST', body: formData, credentials: 'include' });
         
         if (!res.ok) {
           const errorData = await res.json();
@@ -640,7 +640,7 @@ export async function renderChatRoom(container, user, roomId) {
       // 클릭한 요소가 chat-img-clickable 클래스를 가지고 있는지 확인
       if (e.target.classList.contains('chat-img-clickable')) {
         const originName = e.target.dataset.origin; // 심어둔 원본 파일명 가져오기
-        modalImage.src = `/uploads/images/${originName}`; // 원본 이미지 경로 설정
+        modalImage.src = `/uploads/rooms/${roomId}/${originName}`; // 원본 이미지 경로 설정
         imageModal.show();
       }
     });

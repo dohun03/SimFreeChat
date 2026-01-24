@@ -1,4 +1,4 @@
-import { Controller, Post, UploadedFiles, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Controller, Post, UploadedFiles, UseInterceptors, BadRequestException, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as fs from 'fs';
@@ -6,10 +6,11 @@ import * as path from 'path';
 import { writeFile, unlink } from 'fs/promises';
 import sanitize from 'sanitize-filename';
 import { v4 as uuid } from 'uuid';
+import { SessionGuard } from 'src/auth/guards/session.guard';
 
 @Controller('uploads')
 export class UploadsController {
-  private readonly uploadDir = path.join(process.cwd(), 'uploads/images');
+  private readonly uploadDir = path.join(process.cwd(), 'uploads/rooms');
 
   constructor() {
     if (!fs.existsSync(this.uploadDir)) {
@@ -17,7 +18,8 @@ export class UploadsController {
     }
   }
 
-  @Post()
+  @UseGuards(SessionGuard)
+  @Post('/:roomId')
   @UseInterceptors(
     FileFieldsInterceptor(
       [
@@ -30,7 +32,18 @@ export class UploadsController {
       },
     ),
   )
-  async uploadFile(@UploadedFiles() files: { file?: Express.Multer.File[]; thumbnail?: Express.Multer.File[] }) {
+  async uploadFile(
+    @Param('roomId', ParseIntPipe) roomId: number,
+    @UploadedFiles() files: { file?: Express.Multer.File[]; thumbnail?: Express.Multer.File[] }
+  ) {
+    // 방별 전용 디렉토리 경로 설정
+    const roomDir = path.join(this.uploadDir, roomId.toString());
+
+    // 폴더가 없으면 생성
+    if (!fs.existsSync(roomDir)) {
+      fs.mkdirSync(roomDir, { recursive: true });
+    }
+
     // 파일 존재 여부 체크
     if (!files?.file?.[0] || !files?.thumbnail?.[0]) {
       throw new BadRequestException('파일이 존재하지 않습니다.');
@@ -72,15 +85,13 @@ export class UploadsController {
 
     // 파일명 생성 및 저장 준비
     const sharedUuid = uuid();
-    // 한글 파일명 깨짐 방지
     const originalName = Buffer.from(originFile.originalname, 'latin1').toString('utf8');
     const safeName = sanitize(originalName);
-
     const originFileName = `${sharedUuid}-${safeName}`;
     const thumbFileName = `thumb-${sharedUuid}-${safeName.replace(path.extname(safeName), '.webp')}`;
 
-    const originPath = path.join(this.uploadDir, originFileName);
-    const thumbPath = path.join(this.uploadDir, thumbFileName);
+    const originPath = path.join(roomDir, originFileName);
+    const thumbPath = path.join(roomDir, thumbFileName);
 
     // 물리적 파일 저장
     try {

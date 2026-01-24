@@ -9,6 +9,8 @@ import * as bcrypt from 'bcrypt';
 import { RoomResponseDto } from './dto/response-room.dto';
 import { User } from 'src/users/users.entity';
 import { SocketEvents } from 'src/socket/socket.events';
+import path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class RoomsService {
@@ -89,6 +91,10 @@ export class RoomsService {
       });
       if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
 
+      const roomDir = path.join(process.cwd(), 'uploads/rooms', roomId.toString());
+      if (fs.existsSync(roomDir)) {
+        fs.promises.rm(roomDir, { recursive: true, force: true }).catch(e => console.error('파일 삭제 실패:', e));
+      }
 
       const roomUsersArray = await this.redisService.getRoomUsers(roomId);
 
@@ -96,11 +102,7 @@ export class RoomsService {
       await this.redisService.deleteAllBufferMessagesByRoom(roomId);
       await this.redisService.deleteAllCacheMessagesByRoom(roomId);
 
-      await Promise.all(
-        roomUsersArray.map(userId => {
-          this.socketEvents.deleteRoom(roomId, Number(userId));
-        })
-      );
+      roomUsersArray.map(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
     } catch (err) {
       console.error('DB 삭제 에러:', err);
       throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
