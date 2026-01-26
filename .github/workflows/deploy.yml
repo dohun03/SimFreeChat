@@ -30,7 +30,8 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             cd ~/app
-
+            
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest
-            docker-compose up -d
+            docker-compose up -d --remove-orphans
+            docker exec nginx-web nginx -s reload || true
             docker image prune -f

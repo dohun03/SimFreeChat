@@ -1,6 +1,13 @@
 node_modules
 dist
 redis-data
-redis-data-dev
+uploads
+traffic_test
+npm-debug.log
 .git
+.gitignore
 .env
+Dockerfile
+README.md
+docker-compose.yml
+nginx.conf
