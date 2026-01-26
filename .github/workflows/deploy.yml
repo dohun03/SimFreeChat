@@ -1,0 +1,36 @@
+name: CI/CD Docker Compose Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push NestJS Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            cd ~/app
+
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest
+            docker-compose up -d
+            docker image prune -f
