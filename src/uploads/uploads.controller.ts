@@ -1,4 +1,4 @@
-import { Controller, Post, UploadedFiles, UseInterceptors, BadRequestException, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Post, UploadedFiles, UseInterceptors, BadRequestException, Param, ParseIntPipe, UseGuards, Logger } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import * as fs from 'fs';
@@ -10,6 +10,7 @@ import { SessionGuard } from 'src/auth/guards/session.guard';
 
 @Controller('uploads')
 export class UploadsController {
+  private readonly logger = new Logger(UploadsController.name);
   private readonly uploadDir = path.join(process.cwd(), 'uploads/rooms');
 
   constructor() {
@@ -80,7 +81,7 @@ export class UploadsController {
       }
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
-      console.error('용량 체크 중 오류:', e);
+      this.logger.error('용량 체크 중 오류:', e);
     }
 
     // 파일명 생성 및 저장 준비
@@ -100,18 +101,24 @@ export class UploadsController {
         writeFile(thumbPath, thumbFile.buffer),
       ]);
 
-      console.log('업로드 성공:', sharedUuid);
+      this.logger.log(`파일 업로드 성공: Room(${roomId}): File(${originFileName}), Size(${originFile.size} bytes)`);
       return { filename: originFileName };
 
     } catch (err) {
-      console.error('저장 중 에러 발생, 롤백 시도:', err);
+      this.logger.error(`파일 저장 중 에러: Room(${roomId}) 저장 중 에러: ${err.message}`, err.stack);
       
       // 롤백 로직: 하나라도 저장되었다면 삭제
       try {
-        if (fs.existsSync(originPath)) await unlink(originPath);
-        if (fs.existsSync(thumbPath)) await unlink(thumbPath);
+        if (fs.existsSync(originPath)) {
+          await unlink(originPath);
+          this.logger.warn(`파일 롤백: 실패한 원본 파일 삭제됨: ${originPath}`);
+        }
+        if (fs.existsSync(thumbPath)) {
+          await unlink(thumbPath);
+          this.logger.warn(`파일 롤백: 실패한 썸네일 파일 삭제됨: ${thumbPath}`);
+        }
       } catch (rollbackErr) {
-        console.error('롤백 중 추가 에러:', rollbackErr);
+        this.logger.error(`파일 롤백 중 추가 에러: ${rollbackErr}`);
       }
 
       throw new BadRequestException('이미지 저장 중 오류가 발생했습니다.');

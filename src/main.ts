@@ -1,15 +1,20 @@
 import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './common/configs/logger.config';
 import { AppModule } from './app.module';
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(winstonConfig),
+  });
 
   // CORS 설정
   app.enableCors({
-    origin: true, // 추 후 특정 도메인(서버 주소)만 허용
+    origin: process.env.SERVER_URL,
     credentials: true,
   });
   
@@ -28,6 +33,10 @@ async function bootstrap() {
         const messages = errors
           .map(err => err.constraints ? Object.values(err.constraints) : [])
           .flat();
+
+        const validationLogger = new Logger('ValidationError');
+        validationLogger.warn(`DTO 검증 실패: ${JSON.stringify(messages)}`);
+
         return new BadRequestException(messages);
       },
     }),
@@ -39,6 +48,6 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 
-  console.log(`server is running 22 ${process.env.SOCKET_ORIGIN}`);
+  logger.log(`Server is running on port ${process.env.PORT ?? 4000}`);
 }
 bootstrap();

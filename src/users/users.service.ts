@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -10,6 +10,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   constructor( 
     @InjectRepository(User) 
     private userRepository: Repository<User>,
@@ -35,8 +36,9 @@ export class UsersService {
   
     try {
       await this.userRepository.save(newUser);
+      this.logger.log(`회원가입: Name: ${name}, Email: ${email}`);
     } catch (err) {
-      console.error('DB 저장 에러:', err);
+      this.logger.error('회원가입 에러:', err);
       throw new InternalServerErrorException('사용자 생성 중 문제가 발생했습니다.');
     }
   }
@@ -145,10 +147,11 @@ export class UsersService {
 
     try {
       await this.userRepository.save(user);
+      this.logger.log(`프로필 수정: User(${userId}): 변경 항목(${Object.keys(updateUserDto).join(', ')})`);
       const { password, ...safeUser } = user;
       return safeUser;
     } catch (err) {
-      console.error('DB 저장 에러:', err);
+      this.logger.error('프로필 수정 에러:', err);
       throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
     }
   }
@@ -197,10 +200,12 @@ export class UsersService {
 
     try {
       await this.userRepository.save(user);
+      this.logger.warn(`프로필 수정: Admin(${adminId})가 User(${userId}) 정보를 수정함: ${Object.keys(updateUserDto).join(', ')}`);
+
       const { password, ...safeUser } = user;
       return safeUser;
     } catch (err) {
-      console.error('DB 저장 에러:', err);
+      this.logger.error('프로필 수정 에러:', err);
       throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
     }
   }
@@ -226,13 +231,14 @@ export class UsersService {
       });
   
       if (result.affected === 0) throw new BadRequestException('사용자가 존재하지 않거나 권한이 없습니다.');
+
+      this.logger.warn(`계정 삭제: Admin(${adminId})가 User(${userId}) 계정을 삭제함.`);
     } catch (err) {
-      console.error('DB 삭제 에러:', err);
+      this.logger.error('계정 삭제 에러:', err);
       throw new InternalServerErrorException('사용자 삭제 중 문제가 발생했습니다.');
     }
   }
 
-  // 밴 처리 전용 메서드 추가 (별도로 만드는 게 깔끔합니다)
   async banUserById(adminId: number, userId: number, data: { reason: string, banDays: number }) {
     const admin = await this.userRepository.findOne({ where: { id: adminId } });
     if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
@@ -250,12 +256,15 @@ export class UsersService {
       bannedUntil.setDate(bannedUntil.getDate() + data.banDays);
     }
 
-    await this.userRepository.update(userId, {
-      bannedUntil,
-      banReason: data.reason
-    });
+    try {
+      await this.userRepository.update(userId, { bannedUntil, banReason: data.reason });
+      this.logger.warn(`계정 밴: Admin(${adminId})가 User(${userId})를 밴함. 기간: ${data.banDays}일, 사유: ${data.reason}`);
 
-    return { message: '밴 설정 완료' };
+      return { message: '밴 설정 완료' };
+    } catch (err) {
+      this.logger.error(`계정 밴 에러: Admin(${adminId})의 User(${userId}) 밴 처리 실패`, err.stack);
+      throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
+    }
   }
 
   // 밴 해제 메서드 추가
@@ -263,11 +272,14 @@ export class UsersService {
     const admin = await this.userRepository.findOne({ where: { id: adminId } });
     if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
 
-    await this.userRepository.update(userId, {
-      bannedUntil: null,
-      banReason: null
-    });
+    try {
+      await this.userRepository.update(userId, { bannedUntil: null, banReason: null });
+      this.logger.log(`계정 밴 해제: Admin(${adminId})가 User(${userId})의 밴을 해제함.`);
 
-    return { message: '밴 해제 완료' };
+      return { message: '밴 해제 완료' };
+    } catch (err) {
+      this.logger.error(`계정 밴 해제 에러: Admin(${adminId})의 User(${userId}) 밴 해제 실패`, err.stack);
+      throw new InternalServerErrorException('밴 해제 중 오류가 발생했습니다.');
+    }
   }
 }

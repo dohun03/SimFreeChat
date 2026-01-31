@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
@@ -7,6 +7,7 @@ import { RoomUser } from './room-user.entity';
 
 @Injectable()
 export class RoomUsersService {
+  private readonly logger = new Logger(RoomUsersService.name);
   constructor(
     private readonly redisService: RedisService,
     @InjectRepository(Room)
@@ -42,6 +43,8 @@ export class RoomUsersService {
       banReason
     });
     await this.roomUserRepository.save(bannedUser);
+
+    this.logger.log(`밴 완료: Room(${roomId}): Owner(${owner.userId})가 User(${userId})를 밴함. 사유: ${banReason}`);
   }
 
   async unBanUserById(roomId: number, userId: number, ownerId: number): Promise<boolean> {
@@ -61,9 +64,11 @@ export class RoomUsersService {
       
       if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
 
+      this.logger.log(`밴 해제 완료: Room(${roomId}): Owner(${ownerId})가 User(${userId})의 밴을 해제함.`);
+
       return true;
     } catch (err) {
-      console.error('밴 해제 중 DB 삭제 에러:', err);
+      this.logger.error(`밴 해제 중 에러 발생: Room(${roomId}) User(${userId})`, err.stack);
       throw new InternalServerErrorException('밴 해제 처리 중 오류가 발생했습니다.');
     }
   }

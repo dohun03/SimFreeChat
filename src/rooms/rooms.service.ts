@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Like, Repository } from 'typeorm';
@@ -14,6 +14,7 @@ import * as fs from 'fs';
 
 @Injectable()
 export class RoomsService {
+  private readonly logger = new Logger(RoomsService.name);
   constructor(
     @InjectRepository(Room)
     private roomRepository: Repository<Room>,
@@ -48,7 +49,7 @@ export class RoomsService {
         password: !!savedRoom.password,
       };
     } catch (err) {
-      console.error('DB 저장 에러:', err);
+      this.logger.error('DB 저장 에러:', err);
       throw new InternalServerErrorException('방 생성 중 문제가 발생했습니다.');
     }
   }
@@ -71,13 +72,15 @@ export class RoomsService {
       if (password !== undefined) room.password = password === null ? null : await bcrypt.hash(password, 10);
   
       const updatedRoom = await this.roomRepository.save(room);
+
+      this.logger.log(`방 수정: User(${userId})가 Room(${roomId}) 정보를 수정함 (Name: ${!!name}, Max: ${!!maxMembers}, Pwd: ${!!password})`);
   
       return {
         ...updatedRoom,
         password: !!updatedRoom.password,
       }
     } catch (err) {
-      console.error('DB 저장 에러:', err);
+      this.logger.error('DB 저장 에러:', err);
       throw new InternalServerErrorException('방 수정 중 문제가 발생했습니다.');
     }
   }
@@ -91,9 +94,11 @@ export class RoomsService {
       });
       if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
 
+      this.logger.log(`방 삭제: User(${userId})가 Room(${roomId}을 삭제했습니다.`);
+
       const roomDir = path.join(process.cwd(), 'uploads/rooms', roomId.toString());
       if (fs.existsSync(roomDir)) {
-        fs.promises.rm(roomDir, { recursive: true, force: true }).catch(e => console.error('파일 삭제 실패:', e));
+        fs.promises.rm(roomDir, { recursive: true, force: true }).catch(e => this.logger.error(`Room(${roomId})의 파일 삭제 실패:`, e));
       }
 
       const roomUsersArray = await this.redisService.getRoomUsers(roomId);
@@ -104,7 +109,7 @@ export class RoomsService {
 
       roomUsersArray.map(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
     } catch (err) {
-      console.error('DB 삭제 에러:', err);
+      this.logger.error('DB 삭제 에러:', err);
       throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
     }
   }
@@ -179,7 +184,7 @@ export class RoomsService {
 
       return mappedRooms;
     } catch (err) {
-      console.error('DB 조회 에러:', err);
+      this.logger.error('DB 조회 에러:', err);
       throw new InternalServerErrorException('방 조회 중 문제가 발생했습니다.');
     }
   }

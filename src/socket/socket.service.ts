@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
@@ -11,6 +11,8 @@ import { JoinRoomResult, KickUserResult, LeaveRoomResult } from './types/socket.
 
 @Injectable()
 export class SocketService {
+  private readonly logger = new Logger(SocketService.name);
+
   constructor(
     private readonly redisService: RedisService,
     @InjectRepository(User)
@@ -97,7 +99,7 @@ export class SocketService {
         const roomId = Number(key.split(':')[2]);
         const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
         if (!isUserInRoom) {
-          console.log(`${roomId}번 방에는 ${leaveUser.name}님이 존재하지 않습니다.`);
+          this.logger.log(`${roomId}번 방에는 ${leaveUser.name}님이 존재하지 않습니다.`);
           return;
         }
 
@@ -108,7 +110,7 @@ export class SocketService {
 
         this.socketEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, leaveUser);
 
-        console.log(`${roomId}번 방에서 ${leaveUser.name}님을 내보냈습니다.`);
+        this.logger.log(`${roomId}번 방에서 ${leaveUser.name}님을 내보냈습니다.`);
       })
     );
   }

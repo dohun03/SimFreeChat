@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
@@ -11,6 +11,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
   private lastTimestamp = 0;
   private sequence = 0;
 
@@ -41,7 +42,6 @@ export class MessagesService {
 
     const seqStr = this.sequence.toString().padStart(3, '0');
     
-    // 최종 형태: [시간(13)][워커(2)][시퀀스(3)] -> 총 18자리 문자열
     return `${now}${workerId}${seqStr}`;
   }
 
@@ -110,12 +110,14 @@ export class MessagesService {
 
       await this.redisService.pushMessageAndLog(message, messageLog);
 
+      this.logger.log(`메시지 전송 Room(${roomId}) User(${userId})`);
+
       return {
         message: { ...message, user },
         lastMessageId,
       };
     } catch (err) {
-      console.error('메시지 생성 중 에러:', err);
+      this.logger.error('메시지 전송 중 에러:', err);
       if (err instanceof NotFoundException) throw err;
       throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
     }
@@ -154,7 +156,7 @@ export class MessagesService {
     } else {
       await this.redisService.deleteMessageAndLog(roomId, userId, messageId);
     }
-    console.log(`메시지 삭제 완료: ${messageId}`);
+
     return messageId;
   }
   
@@ -226,14 +228,20 @@ export class MessagesService {
       ${chatContext}
     `;
 
+    const startTime = Date.now();
+
     try {
       const result = await model.generateContent(prompt);
       const response = result.response;
       const summaryText = response.text();
 
+      const duration = Date.now() - startTime;
+
+      this.logger.log(`Room(${roomId}) 요약 성공 - 소요시간: ${duration}ms`);
+
       return { summary: summaryText };
     } catch (error) {
-      console.error(error);
+      this.logger.error(`Room(${roomId}) 요약 실패: ${error.message}`, error.stack);
       return { summary: "AI 요약 중 오류가 발생했습니다." };
     }
   }
@@ -243,7 +251,10 @@ export class MessagesService {
     query: any
   ): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
     const admin = await this.userRepository.findOne({ where: { id: userId } });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`비정상적인 로그 접근 시도: UserID(${userId})`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
   
     try {
       const {
@@ -384,7 +395,6 @@ export class MessagesService {
       // 쿼리 조건 일치하는지 확인
       if (cachedData && cachedData.queryStr === currentQueryStr) {
         totalCount = cachedData.totalCount;
-        console.log('DB Count를 스킵');
       } else {
         const row = await countQb
           .select('COUNT(log.created_at)', 'totalCount')
@@ -393,12 +403,11 @@ export class MessagesService {
         totalCount = Number(row.totalCount);
 
         await this.redisService.setUserQueryCache(userId, currentQueryStr, totalCount);
-        console.log('DB Count를 실행');
       }
 
       return { messageLogs, totalCount };
     } catch (err) {
-      console.error('메시지 로그 조회 중 오류 발생:', err);
+      this.logger.error('메시지 로그 조회 중 오류 발생:', err);
       throw new InternalServerErrorException(
         '메시지 로그 조회 중 문제가 발생했습니다.',
       );

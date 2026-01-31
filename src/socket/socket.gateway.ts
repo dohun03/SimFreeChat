@@ -23,10 +23,11 @@ import { LeaveRoomDto } from './dto/leave-room.dto';
 import { DeleteMessageDto } from './dto/delete-message.dto';
 import { KickUserDto } from './dto/kick-user.dto';
 import { BanUserDto } from './dto/ban-user.dto';
+import { Logger } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.SOCKET_ORIGIN,
+    origin: process.env.SERVER_URL,
     credentials: true,
   },
   transport: ['websocket'],
@@ -35,6 +36,8 @@ import { BanUserDto } from './dto/ban-user.dto';
 })
 
 export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(SocketGateway.name);
+
   @WebSocketServer()
   server: Server;
 
@@ -46,15 +49,14 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
   
   handleConnection(client: Socket) {
-    console.log(`[CONNECT] ${client.id} - ${client.handshake.address}`);
+    this.logger.log(`[CONNECT] ID: ${client.id}, IP: ${client.handshake.address}`);
   }
 
   async handleDisconnect(client: Socket) {
-    console.log(`[DISCONNECT] ${client.id}`);
-
     const userId = client.data.userId;
+    this.logger.log(`[DISCONNECT] ID: ${client.id}${userId ? `, User: ${userId}` : ''}`);
+
     if (userId) {
-      console.log(`[DISCONNECT] 유저 ${userId}의 소켓 ${client.id} 정리`);
       await this.redisService.hDelUserSocket(userId, client.id);
     }
   }
@@ -139,7 +141,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUserCount: afterCount,
       });
     } catch (err) {
-      console.error(err.message);
+      this.logger.error(`방 입장 에러: ${err.message}`);
       client.emit('forcedDisconnect', { msg: err.message });
       client.disconnect();
     }
@@ -164,12 +166,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUserCount,
       });
 
-      // 클라이언트에 콜백 실행 값 리턴
       return { success: true };
     } catch (err) {
-      console.error(err.message);
+      this.logger.error(`방 퇴장 에러: ${err.message}`);
       client.disconnect();
-      // 클라이언트에 콜백 실행 값 리턴
       return { success: false, error: err.message };
     }
   }
@@ -216,7 +216,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
-      console.error(err);
+      this.logger.error(`메시지 전송 에러: ${err.message}`);
     }
   }
 
@@ -232,7 +232,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       this.server.to(dto.roomId.toString()).emit('messageDeleted', messageId);
     } catch (err) {
-      console.error(err.message);
+      this.logger.error(`메시지 삭제 에러: ${err.message}`);
       throw new WsException(err.message);
     }
   }
@@ -255,8 +255,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUsers,
         roomUserCount,
       });
+
+      this.logger.warn(`강퇴: Room(${dto.roomId}): Owner(${owner.userId}) -> User(${dto.userId})`);
     } catch (err) {
-      console.error(err.message);
+      this.logger.error(`강퇴 에러: ${err.message}`, err.stack);
       throw new WsException(err.message);
     }
   }
@@ -283,8 +285,10 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUsers,
         roomUserCount,
       });
+
+      this.logger.warn(`밴: Room(${dto.roomId}): Owner(${owner.userId}) -> User(${dto.userId})`);
     } catch (err) {
-      console.error(err.message);
+      this.logger.error(`밴 에러: ${err.message}`, err.stack);
       throw new WsException(err.message);
     }
   }

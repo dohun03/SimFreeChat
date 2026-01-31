@@ -1,5 +1,5 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { Message } from 'src/messages/messages.entity';
@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class RedisService implements OnModuleInit {
+  private readonly logger = new Logger(RedisService.name);
   private isProcessing = false;
 
   constructor(
@@ -28,12 +29,12 @@ export class RedisService implements OnModuleInit {
 
       if (keysToDelete.length > 0) {
         await this.redis.del(...keysToDelete);
-        console.log(`[Redis] 초기화 완료: ${keysToDelete.length}개`);
+        this.logger.log(`[Redis] 초기화 완료: ${keysToDelete.length}개`);
       } else {
-        console.log('[Redis] 초기화할 정보가 없습니다.');
+        this.logger.log('[Redis] 초기화할 정보가 없습니다.');
       }
     } catch (error) {
-      console.error('Redis 부분 초기화 실패:', error);
+      this.logger.error('Redis 부분 초기화 실패:', error);
     }
   }
 
@@ -116,7 +117,7 @@ export class RedisService implements OnModuleInit {
         return acc + (Number(count) || 0);
       }, 0);
     } catch (error) {
-      console.error('[Redis] 전체 접속자 수 합산 에러:', error);
+      this.logger.error('[Redis] 전체 접속자 수 합산 에러:', error);
       return 0;
     }
   }
@@ -189,7 +190,7 @@ export class RedisService implements OnModuleInit {
       if (filteredItems.length > 0) {
         await this.redis.rpush(key, ...filteredItems);
       }
-      console.log(`[Redis] ${key}에서 방 ${roomId}의 대기 메시지 ${items.length - filteredItems.length}건을 정리했습니다.`);
+      this.logger.log(`[Redis] ${key}에서 방 ${roomId}의 대기 메시지 ${items.length - filteredItems.length}건을 정리했습니다.`);
     }
   }
 
@@ -213,7 +214,7 @@ export class RedisService implements OnModuleInit {
     const msgObj = JSON.parse(items[index]);
     msgObj.isDeleted = true;
     await this.redis.lset(key, index, JSON.stringify(msgObj));
-    console.log(`캐시에서 ${messageId} 메시지를 삭제했습니다.`);
+    this.logger.log(`캐시에서 ${messageId} 메시지를 삭제했습니다.`);
 
     return true;
   }
@@ -237,7 +238,7 @@ export class RedisService implements OnModuleInit {
     // [수정] 500개 이상 쌓였고, 현재 처리 중이 아니면 즉시 실행
     const messageCount = await this.redis.llen('buffer:messages');
     if (messageCount >= 500 && !this.isProcessing) {
-      this.handleBufferToDb().catch(err => console.error('[Immediate-Batch] Error:', err));
+      this.handleBufferToDb().catch(err => this.logger.error('[Immediate-Batch] Error:', err));
     }
 
     return results;
@@ -290,19 +291,21 @@ export class RedisService implements OnModuleInit {
   async handleBufferToDb() {
     if (this.isProcessing) return;
 
-    if (process.env.NODE_APP_INSTANCE && process.env.NODE_APP_INSTANCE !== '0') {
-      return;
-    }
+    const lockKey = 'batch-lock:message-processing';
+    
+    const lockResult = await this.redis.set(lockKey, 'locked', 'EX', 50, 'NX');
+
+    if (lockResult !== 'OK') return;
 
     this.isProcessing = true;
-    console.log(`[Batch] 배치 작업을 시작합니다.`);
+    this.logger.log(`[Batch] 배치 작업을 시작합니다.`);
 
     try {
       await this.processBuffer('buffer:messages', this.messageRepository);
       await this.processBuffer('buffer:logs', this.messageLogRepository);
       await this.clearUserQueryCache();
     } catch (error) {
-      console.error(`[Batch] 처리 중 치명적 에러:`, error);
+      this.logger.error(`[Batch] 처리 중 치명적 에러:`, error);
     } finally {
       this.isProcessing = false; // 작업 완료 처리
     }
@@ -348,20 +351,20 @@ export class RedisService implements OnModuleInit {
       }
 
       await this.redis.del(tempKey);
-      console.log(`[Batch] ${key} -> DB 저장 완료 (${parsedData.length}개)`);
+      this.logger.log(`[Batch] ${key} -> DB 저장 완료 (${parsedData.length}개)`);
       
     } catch (error) {
-      console.error(`[Batch] ${key} 처리 중 에러:`, error);
+      this.logger.error(`[Batch] ${key} 처리 중 에러:`, error);
       if (dataExists) {
         try {
           const items = await this.redis.lrange(tempKey, 0, -1);
           if (items.length > 0) {
             await this.redis.rpush(key, ...items);
             await this.redis.del(tempKey);
-            console.warn(`[Batch] ${key} 데이터 복구 완료`);
+            this.logger.warn(`[Batch] ${key} 데이터 복구 완료`);
           }
         } catch (recoveryError) {
-          console.error('데이터 복구 실패:', recoveryError);
+          this.logger.error('데이터 복구 실패:', recoveryError);
         }
       }
     }
