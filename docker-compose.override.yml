@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  my-chat-server:
+    build: 
+      context: .
+      target: development
+    container_name: nestjs-app-dev
+    ports:
+      - "4000:4000"
+    deploy:
+      replicas: 1
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - .:/usr/src/app 
+      - /usr/src/app/node_modules 
+      - ./uploads:/usr/src/app/uploads
+    command: npm run start:dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  redis-service:
+    container_name: redis-cache-dev
+    ports:
+      - "6379:6379"
+
+  nginx-proxy:
+    container_name: nginx-web-dev
+    ports:
+      - "80:80"
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
+      - ./uploads:/var/www/uploads:ro

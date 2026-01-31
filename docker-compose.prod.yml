@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  my-chat-server:
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis-service:
+    container_name: redis-cache
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-proxy:
+    container_name: nginx-web
+    ports:
+      - "80:80"
+    volumes:
+      - static-content:/usr/share/nginx/html:ro
+      - ./uploads:/var/www/uploads:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  static-content:

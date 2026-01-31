@@ -3,70 +3,39 @@ version: '3.8'
 services:
   my-chat-server:
     image: dohun03/my-chat-server:latest
-    container_name: nestjs-app
     restart: always
     env_file:
       - .env
-    environment:
-      - NODE_ENV=production
-      - REDIS_HOST=redis-service
-      - REDIS_PORT=6379
-      - REDIS_MAX_RETRIES=null
-      - REDIS_CONNECT_TIMEOUT=10000
-    volumes:
-      - ./uploads:/usr/src/app/uploads
-      - static-content:/usr/src/app/public
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # 운영 서버에서 서버 수
+    deploy:
+      replicas: 2
     depends_on:
       redis-service:
         condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - chat-network
 
   redis-service:
     image: redis:alpine
-    container_name: redis-cache
     restart: always
     volumes:
-      - ./redis-data:/data
+      - redis-data:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - chat-network
 
   nginx-proxy:
     image: nginx:alpine
-    container_name: nginx-web
     restart: always
-    ports:
-      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - static-content:/usr/share/nginx/html:ro
-      - ./uploads:/var/www/uploads:ro
     depends_on:
-      my-chat-server:
-        condition: service_started
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - my-chat-server
     networks:
       - chat-network
 
@@ -75,5 +44,4 @@ networks:
     driver: bridge
 
 volumes:
-  static-content:
   redis-data:

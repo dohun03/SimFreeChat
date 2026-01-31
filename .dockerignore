@@ -1,13 +1,22 @@
+# 의존성 및 빌드 결과물 (필수)
 node_modules
 dist
+npm-debug.log
+
+# 로컬 데이터 및 테스트 도구 (이미지에 포함되면 안 됨)
 redis-data
 uploads
 traffic_test
-npm-debug.log
+
+# 설정 및 소스 관리 (이미지 보안 및 효율)
 .git
 .gitignore
-.env
+.env*
 Dockerfile
-README.md
-docker-compose.yml
+docker-compose*.yml
 nginx.conf
+README.md
+
+# OS 생성 파일
+.DS_Store
+Thumbs.db
