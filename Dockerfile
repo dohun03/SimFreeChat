@@ -18,7 +18,7 @@ RUN npm run build
 FROM node:20-alpine AS production
 WORKDIR /usr/src/app
 
-# 필수 도구 설치 (상태 확인용 curl 및 이미지 처리 라이브러리 등 대비)
+# 필수 도구 설치
 RUN apk add --no-cache curl
 
 COPY --from=builder /usr/src/app/package*.json ./
@@ -27,10 +27,10 @@ RUN npm install --omit=dev
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/public ./public
 
-# ⭐ 운영 환경에서 업로드 폴더 미리 생성 및 권한 설정
-RUN mkdir -p uploads && chown node:node uploads
+# 운영 환경에서 업로드 폴더 미리 생성 및 권한 설정
+RUN mkdir -p uploads logs/info logs/error && chown -R node:node uploads logs
 
-# 보안을 위해 node 사용자 계정으로 실행 (권장)
+# 보안을 위해 node 사용자 계정으로 실행
 USER node
 
 EXPOSE 4000

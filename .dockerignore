@@ -7,6 +7,7 @@ npm-debug.log
 redis-data
 uploads
 traffic_test
+logs
 
 # 설정 및 소스 관리 (이미지 보안 및 효율)
 .git

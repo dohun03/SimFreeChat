@@ -16,15 +16,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  redis-service:
-    container_name: redis-cache-dev
-    ports:
-      - "6379:6379"
-
   nginx-proxy:
     container_name: nginx-web-dev
-    ports:
-      - "80:80"
     volumes:
       - ./public:/usr/share/nginx/html:ro
-      - ./uploads:/var/www/uploads:ro
+      - ./uploads:/usr/src/app/uploads:ro

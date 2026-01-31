@@ -28,7 +28,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,nginx.conf"
+          source: "docker-compose.yml,docker-compose.prod.yml,nginx.conf,public/"
           target: "~/app/"
 
       - name: Deploy to EC2
@@ -38,13 +38,15 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_KEY }}
           script: |
-            mkdir -p ~/app
+            mkdir -p ~/app/logs/info ~/app/logs/error ~/app/uploads
+            sudo chown -R $USER:$USER ~/app
+            sudo chmod -R 777 ~/app/logs ~/app/uploads
+            
             cd ~/app
+            export MY_UID=$(id -u)
+            export MY_GID=$(id -g)
             
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest
-            
+            MY_UID=$MY_UID MY_GID=$MY_GID
             docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             
-            docker exec nginx-web nginx -s reload || true
-            
-            docker image prune -f
+            docker exec nginx-proxy nginx -s reload || true

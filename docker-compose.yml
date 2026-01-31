@@ -1,10 +1,11 @@
 services:
   my-chat-server:
     image: dohun03/my-chat-server:latest
+    user: "${MY_UID}:${MY_GID}"
     restart: always
     volumes:
-      - ./logs:/usr/src/app/logs
-      - ./uploads:/usr/src/app/uploads
+      - ./logs:/usr/src/app/logs:rw
+      - ./uploads:/usr/src/app/uploads:rw
     env_file:
       - .env
     depends_on:
@@ -22,16 +23,17 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
-      retries: 5
     networks:
       - chat-network
 
   nginx-proxy:
     image: nginx:alpine
     restart: always
+    ports:
+      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./uploads:/usr/src/app/uploads:ro
     depends_on:
       - my-chat-server
     networks:
