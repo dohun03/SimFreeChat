@@ -1,14 +1,12 @@
-version: '3.8'
-
 services:
   my-chat-server:
     image: dohun03/my-chat-server:latest
     restart: always
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./uploads:/usr/src/app/uploads
     env_file:
       - .env
-    # 운영 서버에서 서버 수
-    deploy:
-      replicas: 2
     depends_on:
       redis-service:
         condition: service_healthy

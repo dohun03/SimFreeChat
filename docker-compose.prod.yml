@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   my-chat-server:
+    deploy:
+      replicas: 2
     environment:
       - NODE_ENV=production
-    volumes:
-      - ./uploads:/usr/src/app/uploads
     logging:
       driver: "json-file"
       options:

@@ -1,21 +1,17 @@
-version: '3.8'
-
 services:
   my-chat-server:
     build: 
       context: .
       target: development
-    container_name: nestjs-app-dev
-    ports:
-      - "4000:4000"
     deploy:
-      replicas: 1
+      replicas: 2
     environment:
       - NODE_ENV=development
+      - DB_HOST=host.docker.internal
+      - REDIS_HOST=redis-service
     volumes:
-      - .:/usr/src/app 
-      - /usr/src/app/node_modules 
-      - ./uploads:/usr/src/app/uploads
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
     command: npm run start:dev
     extra_hosts:
       - "host.docker.internal:host-gateway"
