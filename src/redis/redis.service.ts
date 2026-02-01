@@ -238,7 +238,7 @@ export class RedisService implements OnModuleInit {
     // [수정] 500개 이상 쌓였고, 현재 처리 중이 아니면 즉시 실행
     const messageCount = await this.redis.llen('buffer:messages');
     if (messageCount >= 500 && !this.isProcessing) {
-      this.handleBufferToDb().catch(err => this.logger.error('[Immediate-Batch] Error:', err));
+      this.handleBufferToDb().catch(err => this.logger.error('[Batch] Error:', err));
     }
 
     return results;
@@ -342,12 +342,18 @@ export class RedisService implements OnModuleInit {
       });
 
       if (parsedData.length > 0) {
-        await repository
-        .createQueryBuilder()
-        .insert()
-        .values(parsedData)
-        .orIgnore() // ID 중복 시 해당 데이터 제외 후 저장
-        .execute();
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < parsedData.length; i += CHUNK_SIZE) {
+          const chunk = parsedData.slice(i, i + CHUNK_SIZE);
+          await repository
+            .createQueryBuilder()
+            .insert()
+            .values(chunk)
+            .orIgnore()
+            .execute();
+          
+          this.logger.log(`[Batch] ${key} -> ${i + chunk.length}/${parsedData.length} 청크 진행 중...`);
+        }
       }
 
       await this.redis.del(tempKey);
