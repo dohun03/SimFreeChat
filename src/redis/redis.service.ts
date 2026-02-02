@@ -145,7 +145,7 @@ export class RedisService implements OnModuleInit {
 
   // 4. 메시지 관리
 
-  // [방 별 캐시 메시지 조회]
+  // [방별 캐시 메시지 조회]
   async getCacheMessagesByRoom(roomId: number): Promise<any[]> {
     const key = `room:messages:${roomId}`;
     const messages = await this.redis.lrange(key, 0, -1);
@@ -169,32 +169,7 @@ export class RedisService implements OnModuleInit {
     await this.redis.del(`room:messages:${roomId}`);
   }
 
-  // [방별 버퍼 메시지 삭제]
-  async deleteAllBufferMessagesByRoom(roomId: number) {
-    const key = 'buffer:messages';
-
-    const items = await this.redis.lrange(key, 0, -1);
-    if (items.length === 0) return;
-
-    const filteredItems = items.filter((item) => {
-      try {
-        const parsed = JSON.parse(item);
-        return Number(parsed.room?.id) !== roomId;
-      } catch {
-        return true; 
-      }
-    });
-
-    if (items.length !== filteredItems.length) {
-      await this.redis.del(key);
-      if (filteredItems.length > 0) {
-        await this.redis.rpush(key, ...filteredItems);
-      }
-      this.logger.log(`[Redis] ${key}에서 방 ${roomId}의 대기 메시지 ${items.length - filteredItems.length}건을 정리했습니다.`);
-    }
-  }
-
-  // [방 별 캐시 메시지 삭제]
+  // [방별 캐시 메시지 삭제]
   async deleteCacheMessageByRoom(roomId: number, messageId: string) {
     const key = `room:messages:${roomId}`;
   
@@ -286,16 +261,19 @@ export class RedisService implements OnModuleInit {
     return true;
   }
 
+  async getLock(key: string, ttlSeconds: number): Promise<boolean> {
+    const result = await this.redis.set(key, 'locked', 'EX', ttlSeconds, 'NX');
+    return result === 'OK';
+  }
+
   // 5. 메시지 배치 작업 (1분마다 실행)
   @Cron(CronExpression.EVERY_MINUTE)
   async handleBufferToDb() {
     if (this.isProcessing) return;
 
-    const lockKey = 'batch-lock:message-processing';
-    
-    const lockResult = await this.redis.set(lockKey, 'locked', 'EX', 50, 'NX');
-
-    if (lockResult !== 'OK') return;
+    const lockKey = 'lock:batch-message-processing';
+    const hasLock = await this.getLock(lockKey, 50);
+    if (!hasLock) return;
 
     this.isProcessing = true;
     this.logger.log(`[Batch] 배치 작업을 시작합니다.`);

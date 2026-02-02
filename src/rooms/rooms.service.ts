@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
-import { Like, Repository } from 'typeorm';
+import { LessThan, Like, Repository } from 'typeorm';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room } from './rooms.entity';
@@ -11,6 +11,7 @@ import { User } from 'src/users/users.entity';
 import { SocketEvents } from 'src/socket/socket.events';
 import path from 'path';
 import * as fs from 'fs';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class RoomsService {
@@ -85,10 +86,10 @@ export class RoomsService {
     }
   }
 
-  // 방 삭제
-  async deleteRoom(roomId: number, userId: number): Promise<void> {
+  // 방 임시 삭제
+  async softDeleteRoom(roomId: number, userId: number): Promise<void> {
     try {
-      const result = await this.roomRepository.delete({
+      const result = await this.roomRepository.softDelete({
         id: roomId,
         owner: { id: userId }
       });
@@ -96,21 +97,56 @@ export class RoomsService {
 
       this.logger.log(`방 삭제: User(${userId})가 Room(${roomId}을 삭제했습니다.`);
 
-      const roomDir = path.join(process.cwd(), 'uploads/rooms', roomId.toString());
-      if (fs.existsSync(roomDir)) {
-        fs.promises.rm(roomDir, { recursive: true, force: true }).catch(e => this.logger.error(`Room(${roomId})의 파일 삭제 실패:`, e));
-      }
-
       const roomUsersArray = await this.redisService.getRoomUsers(roomId);
-
-      await this.redisService.deleteRoom(roomId);
-      await this.redisService.deleteAllBufferMessagesByRoom(roomId);
-      await this.redisService.deleteAllCacheMessagesByRoom(roomId);
 
       roomUsersArray.map(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
     } catch (err) {
       this.logger.error('DB 삭제 에러:', err);
       throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
+    }
+  }
+
+  // 방 영구 삭제 스케줄러
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  async deleteOldRooms() {
+    const lockKey = 'lock:delete-old-rooms';
+    const hasLock = await this.redisService.getLock(lockKey, 60);
+    if (!hasLock) return;
+
+    this.logger.log('방 삭제: 스케줄러 가동');
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    try {
+      const expiredRooms = await this.roomRepository.find({
+        where: {
+          deletedAt: LessThan(oneWeekAgo), // deletedAt < oneWeekAgo
+        },
+        withDeleted: true, // 소프트 삭제된 데이터 포함
+      });
+
+      if (expiredRooms.length === 0) {
+        this.logger.log('방 삭제: 삭제 대상인 방이 없습니다.');
+        return;
+      }
+
+      for (const room of expiredRooms) {
+        await this.roomRepository.delete(room.id);
+
+        const roomDir = path.join(process.cwd(), 'uploads/rooms', room.id.toString());
+        if (fs.existsSync(roomDir)) {
+          await fs.promises.rm(roomDir, { recursive: true, force: true })
+            .catch(e => this.logger.error(`Room(${room.id}) 파일 삭제 실패:`, e));
+        }
+
+        await this.redisService.deleteRoom(room.id);
+        await this.redisService.deleteAllCacheMessagesByRoom(room.id);
+
+        this.logger.log(`방 삭제: Room(${room.id}) 영구 삭제 완료`);
+      }
+    } catch (err) {
+      this.logger.error('방 삭제: 스케줄러 작업 중 에러 발생:', err);
     }
   }
 

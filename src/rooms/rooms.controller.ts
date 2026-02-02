@@ -43,7 +43,7 @@ export class RoomsController {
     @Param('roomId', ParseIntPipe) roomId: number,
     @Req() req: any
   ) {
-    await this.roomsService.deleteRoom(roomId, req.user.userId);
+    await this.roomsService.softDeleteRoom(roomId, req.user.userId);
 
     return { message: '삭제 되었습니다.' };
   }
