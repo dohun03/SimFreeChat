@@ -25,7 +25,7 @@
 
 ## 데모 사이트
 
-- **URL:** [http://13.209.105.94](http://13.209.105.94)
+- **URL:** [https://simfreechat.com](https://simfreechat.com)
 - **테스트 계정:** ID: `test` / PW: `1234`
 
 ---

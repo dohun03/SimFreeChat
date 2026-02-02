@@ -357,7 +357,7 @@ export class RedisService implements OnModuleInit {
       }
 
       await this.redis.del(tempKey);
-      this.logger.log(`[Batch] ${key} -> DB 저장 완료 (${parsedData.length}개)`);
+      this.logger.log(`[Batch] ${key} -> DB 저장 및 Redis 정리 완료 (${parsedData.length}개)`);
       
     } catch (error) {
       this.logger.error(`[Batch] ${key} 처리 중 에러:`, error);

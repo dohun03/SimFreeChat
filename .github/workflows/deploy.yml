@@ -46,6 +46,7 @@ jobs:
             export MY_UID=$(id -u)
             export MY_GID=$(id -g)
             
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
             MY_UID=$MY_UID MY_GID=$MY_GID
             docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             
