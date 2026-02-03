@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
 import { Room } from 'src/rooms/rooms.entity';
@@ -16,38 +16,42 @@ export class RoomUsersService {
     private readonly roomUserRepository: Repository<RoomUser>,
   ) {}
 
-  async banUserById(roomId: number, userId: number, owner: any, banReason: string): Promise<void> {
-    const room = await this.roomRepository.findOne({
-      where: {
-        id: roomId,
-        owner: { id: owner.userId }
-      },
-      relations: ['owner'],
-    });
-    if (!room) throw new UnauthorizedException('방장만 수행할 수 있습니다.');
-    if (room.owner.id === userId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
+  async banUserById(roomId: number, targetUserId: number, ownerId: number, banReason: string): Promise<void> {
+    const [room, roomUser] = await Promise.all([
+      this.roomRepository.findOne({
+        where: { id: roomId },
+        relations: ['owner'],
+      }),
+      this.roomUserRepository.findOne({
+        where: { room: { id: roomId }, user: { id: targetUserId } },
+      }),
+    ]);
 
-    let roomUser = await this.roomUserRepository.findOne({
-      where: {
+    // 2. 권한 및 상태 체크
+    if (!room || room.owner.id !== ownerId) throw new ForbiddenException('방장 권한이 없습니다.');
+    if (room.owner.id === targetUserId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
+    if (roomUser?.isBanned) throw new BadRequestException('이미 밴 상태인 유저입니다.');
+    
+    try {
+      const targetUser = roomUser || this.roomUserRepository.create({
         room: { id: roomId },
-        user: { id: userId },
-      },
-    });
-    if (roomUser?.isBanned) throw new BadRequestException('해당 유저는 이미 밴 상태입니다.');
+        user: { id: targetUserId },
+      });
 
-    // 밴 로직
-    const bannedUser = this.roomUserRepository.create({
-      room: { id: roomId },
-      user: { id: userId },
-      isBanned: true,
-      banReason
-    });
-    await this.roomUserRepository.save(bannedUser);
+      targetUser.isBanned = true;
+      targetUser.banReason = banReason;
 
-    this.logger.log(`밴 완료: Room(${roomId}): Owner(${owner.userId})가 User(${userId})를 밴함. 사유: ${banReason}`);
+      await this.roomUserRepository.save(targetUser);
+      
+      this.logger.log(`[ROOM_USER_BAN_SUCCESS] 방ID:${roomId} | 대상ID:${targetUserId}`);
+
+    } catch (err) {
+      this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
+      throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
+    }
   }
 
-  async unBanUserById(roomId: number, userId: number, ownerId: number): Promise<boolean> {
+  async unBanUserById(roomId: number, targetUserId: number, ownerId: number): Promise<boolean> {
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
@@ -59,21 +63,21 @@ export class RoomUsersService {
     try {
       const result = await this.roomUserRepository.delete({
         room: { id: roomId },
-        user: { id: userId }
+        user: { id: targetUserId },
+        isBanned: true,
       });
-      
       if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
 
-      this.logger.log(`밴 해제 완료: Room(${roomId}): Owner(${ownerId})가 User(${userId})의 밴을 해제함.`);
+      this.logger.log(`[ROOM_USER_UNBAN_SUCCESS] 방ID:${roomId} | 방장ID:${ownerId} | 대상ID:${targetUserId}`);
 
       return true;
     } catch (err) {
-      this.logger.error(`밴 해제 중 에러 발생: Room(${roomId}) User(${userId})`, err.stack);
+      this.logger.error(`[ROOM_USER_UNBAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('밴 해제 처리 중 오류가 발생했습니다.');
     }
   }
 
-  getBannedUsersById(roomId: number): Promise<RoomUser[]> {
+  getBannedUsersByRoomId(roomId: number): Promise<RoomUser[]> {
     return this.roomUserRepository
     .createQueryBuilder('roomUser')
     .leftJoinAndSelect('roomUser.user', 'user')

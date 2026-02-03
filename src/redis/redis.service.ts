@@ -25,16 +25,15 @@ export class RedisService implements OnModuleInit {
     try {
       const roomKeys = await this.redis.keys('room:users:*');
       const socketKeys = await this.redis.keys('user:sockets:*');
+      const userRoomKeys = await this.redis.keys('user:rooms:*');
       const keysToDelete = [...roomKeys, ...socketKeys];
 
       if (keysToDelete.length > 0) {
         await this.redis.del(...keysToDelete);
-        this.logger.log(`[Redis] 초기화 완료: ${keysToDelete.length}개`);
-      } else {
-        this.logger.log('[Redis] 초기화할 정보가 없습니다.');
+        this.logger.log(`[REDIS_INIT_SUCCESS] 삭제개수:${keysToDelete.length} | 임시 세션 데이터 정리 완료`);
       }
-    } catch (error) {
-      this.logger.error('Redis 부분 초기화 실패:', error);
+    } catch (err) {
+      this.logger.error(`[REDIS_INIT_ERROR] 사유:${err.message}`, err.stack);
     }
   }
 
@@ -52,7 +51,7 @@ export class RedisService implements OnModuleInit {
     await this.redis.del(`session:${sessionId}`);
   }
 
-  // 2. 채팅방 접속/퇴장 관리
+  // 2. 방별 유저 관리
   async addUserToRoom(roomId: number, userId: number) {
     await this.redis.sadd(`room:users:${roomId}`, userId);
   }
@@ -77,7 +76,6 @@ export class RedisService implements OnModuleInit {
     return this.redis.scard(`room:users:${roomId}`);
   }
 
-  // { roomId: 유저 수 }
   async getRoomUserCountsBulk(roomIds: number[]): Promise<Record<number, number>> {
     if (roomIds.length === 0) return {};
 
@@ -116,8 +114,8 @@ export class RedisService implements OnModuleInit {
         if (err) return acc;
         return acc + (Number(count) || 0);
       }, 0);
-    } catch (error) {
-      this.logger.error('[Redis] 전체 접속자 수 합산 에러:', error);
+    } catch (err) {
+      this.logger.error(`[REDIS_COUNT_ERROR] 전체 접속자 합산 오류 | 사유:${err.message}`, err.stack);
       return 0;
     }
   }
@@ -126,7 +124,21 @@ export class RedisService implements OnModuleInit {
     return this.redis.sismember(`room:users:${roomId}`, userId);
   }
 
-  // 3. 소켓 세션 관리 (Hash 구조 사용)
+  // 3. 유저별 방 관리
+  async addRoomToUser(userId: number, roomId: number) {
+    await this.redis.sadd(`user:rooms:${userId}`, roomId);
+    await this.redis.expire(`user:rooms:${userId}`, 3600 * 24);
+  }
+
+  async removeRoomFromUser(userId: number, roomId: number) {
+    await this.redis.srem(`user:rooms:${userId}`, roomId);
+  }
+
+  async getUserRooms(userId: number): Promise<string[]> {
+    return this.redis.smembers(`user:rooms:${userId}`);
+  }
+
+  // 4. 유저별 소켓 세션 관리 (Hash 구조 사용)
   // user:sockets:userId { field: socketId, value: roomId }
   async hSetUserSocket(userId: number, socketId: string, roomId: number) {
     const key = `user:sockets:${userId}`;
@@ -143,7 +155,7 @@ export class RedisService implements OnModuleInit {
     await this.redis.hdel(`user:sockets:${userId}`, socketId);
   }
 
-  // 4. 메시지 관리
+  // 5. 메시지 관리
 
   // [방별 캐시 메시지 조회]
   async getCacheMessagesByRoom(roomId: number): Promise<any[]> {
@@ -189,7 +201,6 @@ export class RedisService implements OnModuleInit {
     const msgObj = JSON.parse(items[index]);
     msgObj.isDeleted = true;
     await this.redis.lset(key, index, JSON.stringify(msgObj));
-    this.logger.log(`캐시에서 ${messageId} 메시지를 삭제했습니다.`);
 
     return true;
   }
@@ -210,10 +221,12 @@ export class RedisService implements OnModuleInit {
 
     const results = await multi.exec();
 
-    // [수정] 500개 이상 쌓였고, 현재 처리 중이 아니면 즉시 실행
+    // 500개 이상 쌓였고, 현재 처리 중이 아니면 즉시 실행
     const messageCount = await this.redis.llen('buffer:messages');
     if (messageCount >= 500 && !this.isProcessing) {
-      this.handleBufferToDb().catch(err => this.logger.error('[Batch] Error:', err));
+      this.handleBufferToDb().catch(
+        err => this.logger.error(`[BATCH_DIRECT_RUN_ERROR] 즉시 배치 실행 실패 | 사유:${err.message}`, err.stack)
+      );
     }
 
     return results;
@@ -224,17 +237,17 @@ export class RedisService implements OnModuleInit {
     const bufferKey = 'buffer:messages';
     const logKey = 'buffer:logs';
 
-    // 1. 버퍼 리스트를 가져옴
+    // 버퍼 리스트를 가져옴
     const items = await this.redis.lrange(bufferKey, 0, -1);
 
-    // 2. 해당 메시지 위치 찾기
+    // 해당 메시지 위치 찾기
     const index = items.findIndex((item) => {
       const msg = JSON.parse(item);
       return msg.id === messageId && msg.user.id === userId && msg.room.id === roomId;
     });
     if (index === -1) return false;
 
-    // 3. 찾았다면 수정 작업 진행
+    // 찾았다면 수정 작업 진행
     const msgObj = JSON.parse(items[index]);
     const multi = this.redis.multi();
 
@@ -266,7 +279,7 @@ export class RedisService implements OnModuleInit {
     return result === 'OK';
   }
 
-  // 5. 메시지 배치 작업 (1분마다 실행)
+  // 메시지 배치 작업 (1분마다 실행)
   @Cron(CronExpression.EVERY_MINUTE)
   async handleBufferToDb() {
     if (this.isProcessing) return;
@@ -276,14 +289,14 @@ export class RedisService implements OnModuleInit {
     if (!hasLock) return;
 
     this.isProcessing = true;
-    this.logger.log(`[Batch] 배치 작업을 시작합니다.`);
+    this.logger.log(`[BATCH_PROCESS_START] 메시지 및 로그 DB 저장 시작`);
 
     try {
       await this.processBuffer('buffer:messages', this.messageRepository);
       await this.processBuffer('buffer:logs', this.messageLogRepository);
       await this.clearUserQueryCache();
-    } catch (error) {
-      this.logger.error(`[Batch] 처리 중 치명적 에러:`, error);
+    } catch (err) {
+      this.logger.error(`[BATCH_CRITICAL_ERROR] 배치 전체 흐름 중단 | 사유:${err.message}`, err.stack);
     } finally {
       this.isProcessing = false; // 작업 완료 처리
     }
@@ -291,19 +304,16 @@ export class RedisService implements OnModuleInit {
 
   private async processBuffer(key: string, repository: Repository<any>) {
     const tempKey = `${key}:temp`;
-    let dataExists = false;
 
     try {
       const len = await this.redis.llen(key);
       if (len === 0) return;
 
       await this.redis.rename(key, tempKey);
-      dataExists = true;
 
       const data = await this.redis.lrange(tempKey, 0, -1);
       const parsedData = data.map((item) => {
         const obj = JSON.parse(item);
-
         if (obj.createdAt) obj.createdAt = new Date(obj.createdAt);
         if (key === 'buffer:logs') {
           obj.room_id = obj.roomId;
@@ -329,28 +339,15 @@ export class RedisService implements OnModuleInit {
             .values(chunk)
             .orIgnore()
             .execute();
-          
-          this.logger.log(`[Batch] ${key} -> ${i + chunk.length}/${parsedData.length} 청크 진행 중...`);
         }
       }
 
-      await this.redis.del(tempKey);
-      this.logger.log(`[Batch] ${key} -> DB 저장 및 Redis 정리 완료 (${parsedData.length}개)`);
+      this.logger.log(`[BATCH_SAVE_SUCCESS] 키:${key} | 총 저장개수:${parsedData.length} | DB 저장 완료`);
       
-    } catch (error) {
-      this.logger.error(`[Batch] ${key} 처리 중 에러:`, error);
-      if (dataExists) {
-        try {
-          const items = await this.redis.lrange(tempKey, 0, -1);
-          if (items.length > 0) {
-            await this.redis.rpush(key, ...items);
-            await this.redis.del(tempKey);
-            this.logger.warn(`[Batch] ${key} 데이터 복구 완료`);
-          }
-        } catch (recoveryError) {
-          this.logger.error('데이터 복구 실패:', recoveryError);
-        }
-      }
+    } catch (err) {
+      this.logger.error(`[BATCH_KEY_PROCESS_ERROR] 키:${key} | 사유:${err.message}`, err.stack);
+    } finally {
+      await this.redis.del(tempKey);
     }
   }
 

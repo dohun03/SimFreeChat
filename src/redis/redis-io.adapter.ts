@@ -23,10 +23,10 @@ export class RedisIoAdapter extends IoAdapter {
 
     // 에러 핸들러 무조건 등록
     pubClient.on('error', (err) => {
-      this.logger.warn('[RedisAdapter-Pub] 연결 대기 중...');
+      this.logger.warn('[REDIS_ADAPTER_PUB_WAIT] 연결 대기 중...');
     });
     subClient.on('error', (err) => {
-      this.logger.warn('[RedisAdapter-Sub] 연결 대기 중...');
+      this.logger.warn('[REDIS_ADAPTER_SUB_WAIT] 연결 대기 중...');
     });
 
     this.adapterConstructor = createAdapter(pubClient, subClient);

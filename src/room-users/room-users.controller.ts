@@ -13,7 +13,7 @@ export class RoomUsersController {
   getById(
     @Param('roomId', ParseIntPipe) roomId: number,
   ) {
-    return this.roomUsersService.getBannedUsersById(roomId);
+    return this.roomUsersService.getBannedUsersByRoomId(roomId);
   }
   
   @UseGuards(SessionGuard)

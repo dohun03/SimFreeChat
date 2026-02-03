@@ -26,31 +26,25 @@ export class RoomsService {
   ) {}
 
   // 방 생성
-  async createRoom(userId: number, createRoomDto: CreateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
+  async createRoom(userId: number, createRoomDto: CreateRoomDto) {
     const { name, maxMembers, password } = createRoomDto;
 
-    const owner = await this.userRepository.findOne({
-      where: { id: userId }
-    });
+    const owner = await this.userRepository.findOne({ where: { id: userId } });
     if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
 
-    let hashedPassword: string | null = null;
-    if (password) hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
     const room = this.roomRepository.create({
-      name, 
-      owner,
-      maxMembers,
-      password: hashedPassword,
+      name, owner, maxMembers, password: hashedPassword,
     });
+
     try {
       const savedRoom = await this.roomRepository.save(room);
-      return {
-        ...savedRoom,
-        password: !!savedRoom.password,
-      };
+      this.logger.log(`[ROOM_CREATE_SUCCESS] 방ID:${savedRoom.id} | 생성자:${userId}`);
+      
+      return { ...savedRoom, password: !!savedRoom.password };
     } catch (err) {
-      this.logger.error('DB 저장 에러:', err);
+      this.logger.error(`[ROOM_CREATE_ERROR] 유저ID:${userId} | 사유:${err.message}`);
       throw new InternalServerErrorException('방 생성 중 문제가 발생했습니다.');
     }
   }
@@ -65,7 +59,10 @@ export class RoomsService {
         owner: { id: userId }
       }
     });
-    if (!room) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+    if (!room) {
+      this.logger.warn(`[ROOM_UPDATE_DENIED] 방ID:${roomId} | 유저ID:${userId} | 사유:권한 없음`);
+      throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+    }
     
     try {
       if (name !== undefined) room.name = name;
@@ -73,15 +70,13 @@ export class RoomsService {
       if (password !== undefined) room.password = password === null ? null : await bcrypt.hash(password, 10);
   
       const updatedRoom = await this.roomRepository.save(room);
-
-      this.logger.log(`방 수정: User(${userId})가 Room(${roomId}) 정보를 수정함 (Name: ${!!name}, Max: ${!!maxMembers}, Pwd: ${!!password})`);
   
       return {
         ...updatedRoom,
         password: !!updatedRoom.password,
       }
     } catch (err) {
-      this.logger.error('DB 저장 에러:', err);
+      this.logger.error(`[ROOM_UPDATE_ERROR] 방ID:${roomId} | 유저ID:${userId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('방 수정 중 문제가 발생했습니다.');
     }
   }
@@ -93,15 +88,18 @@ export class RoomsService {
         id: roomId,
         owner: { id: userId }
       });
-      if (result.affected === 0) throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
-
-      this.logger.log(`방 삭제: User(${userId})가 Room(${roomId}을 삭제했습니다.`);
+      if (result.affected === 0) {
+        this.logger.warn(`[ROOM_DELETE_DENIED] 권한 없음 | 방ID:${roomId} | 유저ID:${userId}`);
+        throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+      }
 
       const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+      roomUsersArray.forEach(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
 
-      roomUsersArray.map(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
+      this.logger.log(`[ROOM_SOFT_DELETE] 방ID:${roomId} | 유저ID:${userId} | 퇴장인원:${roomUsersArray.length}명`);
+
     } catch (err) {
-      this.logger.error('DB 삭제 에러:', err);
+      this.logger.error(`[ROOM_SOFT_DELETE_ERROR] 방ID:${roomId} | 유저ID:${userId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
     }
   }
@@ -112,8 +110,6 @@ export class RoomsService {
     const lockKey = 'lock:delete-old-rooms';
     const hasLock = await this.redisService.getLock(lockKey, 60);
     if (!hasLock) return;
-
-    this.logger.log('방 삭제: 스케줄러 가동');
 
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -126,10 +122,7 @@ export class RoomsService {
         withDeleted: true, // 소프트 삭제된 데이터 포함
       });
 
-      if (expiredRooms.length === 0) {
-        this.logger.log('방 삭제: 삭제 대상인 방이 없습니다.');
-        return;
-      }
+      if (expiredRooms.length === 0) return;
 
       for (const room of expiredRooms) {
         await this.roomRepository.delete(room.id);
@@ -137,16 +130,16 @@ export class RoomsService {
         const roomDir = path.join(process.cwd(), 'uploads/rooms', room.id.toString());
         if (fs.existsSync(roomDir)) {
           await fs.promises.rm(roomDir, { recursive: true, force: true })
-            .catch(e => this.logger.error(`Room(${room.id}) 파일 삭제 실패:`, e));
+            .catch(e => this.logger.warn(`[ROOM_FILE_DELETE_ERROR] 방ID:${room.id} | 사유:파일 제거 실패`));
         }
 
         await this.redisService.deleteRoom(room.id);
         await this.redisService.deleteAllCacheMessagesByRoom(room.id);
 
-        this.logger.log(`방 삭제: Room(${room.id}) 영구 삭제 완료`);
+        this.logger.log(`[ROOM_DELETE_SUCCESS] 방ID:${room.id} | 영구 삭제 및 캐시 정리 완료`);
       }
     } catch (err) {
-      this.logger.error('방 삭제: 스케줄러 작업 중 에러 발생:', err);
+      this.logger.error(`[ROOM_DELETE_ERROR] 스케줄러 중단 | 사유:${err.message}`, err.stack);
     }
   }
 
@@ -157,72 +150,41 @@ export class RoomsService {
 
   // 방 전체 조회
   async getAllRooms(sort: string = 'popular_desc', search?: string): Promise<RoomResponseDto[]> {
-    try {
-      const where: any = {};
+    const qb = this.roomRepository.createQueryBuilder('room')
+      .leftJoinAndSelect('room.owner', 'owner')
+      .select([
+        'room.id', 'room.name', 'room.maxMembers', 'room.password',
+        'room.createdAt', 'room.updatedAt',
+        'owner.id', 'owner.name'
+      ]);
 
-      if (search) {
-        where.name = Like(`%${search}%`);
-      }
+    if (search) qb.andWhere('room.name LIKE :search', { search: `%${search}%` });
 
-      const rooms = await this.roomRepository.find({
-        where,
-        relations: ['owner'],
-        select: {
-          id: true,
-          name: true,
-          maxMembers: true,
-          password: true,
-          createdAt: true,
-          updatedAt: true,
-          owner: {
-            id: true,
-            name: true,
-          }
-        }
-      });
-      if (rooms.length === 0) return [];
+    // 날짜 정렬
+    if (sort === 'createdAt_desc') qb.orderBy('room.createdAt', 'DESC');
+    else if (sort === 'createdAt_asc') qb.orderBy('room.createdAt', 'ASC');
+    else qb.orderBy('room.id', 'DESC');
 
-      // Redis에서 실시간 인원수 병렬 로드
-      const countsMap = await this.redisService.getRoomUserCountsBulk(rooms.map(r => r.id));
+    const rooms = await qb.getMany();
+    if (rooms.length === 0) return [];
 
-      // DTO 매핑
-      const mappedRooms: RoomResponseDto[] = rooms.map(room => ({
-        id: room.id,
-        name: room.name,
-        currentMembers: countsMap[room.id] || 0,
-        maxMembers: room.maxMembers,
-        password: !!room.password,
-        createdAt: room.createdAt,
-        updatedAt: room.updatedAt,
-        owner: {
-          id: room.owner.id,
-          name: room.owner.name,
-        }
-      }));
+    const countsMap = await this.redisService.getRoomUserCountsBulk(rooms.map(r => r.id));
 
-      switch (sort) {
-        case 'popular_desc': // 인기 많은 순
-          mappedRooms.sort((a, b) => b.currentMembers - a.currentMembers || b.id - a.id);
-          break;
-        case 'popular_asc': // 인기 적은 순
-          mappedRooms.sort((a, b) => a.currentMembers - b.currentMembers || b.id - a.id);
-          break;
-        case 'createdAt_desc': // 최신순
-          mappedRooms.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          break;
-        case 'createdAt_asc': // 과거순
-          mappedRooms.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-          break;
-        default:
-          mappedRooms.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          break;
-      }
+    const mappedRooms = rooms.map(room => ({
+      ...room,
+      currentMembers: countsMap[room.id] || 0,
+      password: !!room.password,
+    }));
 
-      return mappedRooms;
-    } catch (err) {
-      this.logger.error('DB 조회 에러:', err);
-      throw new InternalServerErrorException('방 조회 중 문제가 발생했습니다.');
+    // 인원수 정렬
+    if (sort.startsWith('popular')) {
+      mappedRooms.sort((a, b) => 
+        sort === 'popular_desc' 
+          ? b.currentMembers - a.currentMembers || b.id - a.id
+          : a.currentMembers - b.currentMembers || b.id - a.id
+      );
     }
+    return mappedRooms;
   }
 
   // 방 하나 조회

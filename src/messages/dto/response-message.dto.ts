@@ -9,8 +9,5 @@ export class ResponseMessageDto {
     id: number;
     name: string;
     isAdmin: boolean;
-    bannedUntil: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
   };
 }

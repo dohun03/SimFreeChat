@@ -48,19 +48,19 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly redisService: RedisService,
   ) {}
   
-  handleConnection(client: Socket) {
-    this.logger.log(`[CONNECT] ID: ${client.id}, IP: ${client.handshake.address}`);
-  }
+  handleConnection(client: Socket) {}
 
   async handleDisconnect(client: Socket) {
     const userId = client.data.userId;
-    this.logger.log(`[DISCONNECT] ID: ${client.id}${userId ? `, User: ${userId}` : ''}`);
 
     if (userId) {
-      await this.redisService.hDelUserSocket(userId, client.id);
+      try {
+        await this.redisService.hDelUserSocket(userId, client.id);
+      } catch (err) {
+        this.logger.error(`[ROOM_SOCKET_DISCONNECT_ERROR] 유저ID:${userId} | 소켓ID:${client.id} | 사유:${err.message}`);
+      }
     }
   }
-
   // 소켓 추가
   async addUserSocket(userId: number, socketId: string, roomId: number) {
     await this.redisService.hSetUserSocket(userId, socketId, roomId);
@@ -117,41 +117,34 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
   
   @SubscribeMessage('joinRoom')
-  async handleJoinRoom(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(JoinRoomDto, payload);
       const user = await this.getUserFromSession(client);
+      const { roomId, password } = dto;
+      
       client.data.userId = user.userId;
 
-      const { roomId, password } = dto;
       const { roomUsers, afterCount, joinUser } = await this.socketService.joinRoom(roomId, user.userId, password);
 
-      // 방 입장 로직
       await this.removeUserSocket(roomId, user.userId);
       await this.addUserSocket(user.userId, client.id, roomId);
       client.join(roomId.toString());
   
-      // 방 전체에 입장 메시지 전송
       this.server.to(roomId.toString()).emit('roomEvent', {
         msg: `${joinUser.name} 님이 입장했습니다.`,
         roomUsers,
         roomUserCount: afterCount,
       });
     } catch (err) {
-      this.logger.error(`방 입장 에러: ${err.message}`);
+      this.logger.error(`[ROOM_JOIN_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.userId || 'unknown'} | 사유:${err.message}`, err.stack);
       client.emit('forcedDisconnect', { msg: err.message });
       client.disconnect();
     }
   }
 
   @SubscribeMessage('leaveRoom')
-  async handleLeaveRoom(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleLeaveRoom(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(LeaveRoomDto, payload);
       const user = await this.getUserFromSession(client);
@@ -168,7 +161,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       return { success: true };
     } catch (err) {
-      this.logger.error(`방 퇴장 에러: ${err.message}`);
+      this.logger.error(`[ROOM_LEAVE_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.userId} | 사유:${err.message}`);
       client.disconnect();
       return { success: false, error: err.message };
     }
@@ -204,10 +197,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('sendMessage')
-  async handleSendMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(SendMessageDto, payload);
       const user = await this.getUserFromSession(client);
@@ -216,15 +206,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
-      this.logger.error(`메시지 전송 에러: ${err.message}`);
+      this.logger.error(`[MESSAGE_SEND_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.userId} | 사유:${err.message}`);
     }
   }
 
   @SubscribeMessage('deleteMessage')
-  async handleDeleteMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleDeleteMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(DeleteMessageDto, payload);
       const user = await this.getUserFromSession(client);
@@ -232,16 +219,13 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
       this.server.to(dto.roomId.toString()).emit('messageDeleted', messageId);
     } catch (err) {
-      this.logger.error(`메시지 삭제 에러: ${err.message}`);
+      this.logger.error(`[MESSAGE_DELETE_ERROR] 방ID:${payload?.roomId} | 메시지ID:${payload?.messageId} | 유저ID:${client.data.userId} | 사유:${err.message}`);
       throw new WsException(err.message);
     }
   }
 
   @SubscribeMessage('kickUser')
-  async handleKickUser(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleKickUser(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(KickUserDto, payload);
       const owner = await this.getUserFromSession(client);
@@ -255,40 +239,33 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomUsers,
         roomUserCount,
       });
-
-      this.logger.warn(`강퇴: Room(${dto.roomId}): Owner(${owner.userId}) -> User(${dto.userId})`);
     } catch (err) {
-      this.logger.error(`강퇴 에러: ${err.message}`, err.stack);
+      this.logger.error(`[ROOM_USER_KICK_ERROR] 방ID:${payload?.roomId} | 대상ID:${payload?.userId} | 사유:${err.message}`, err.stack);
       throw new WsException(err.message);
     }
   }
 
   @SubscribeMessage('banUser')
-  async handleBanUser(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() payload: any,
-  ) {
+  async handleBanUser(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const dto = await this.validateDto(BanUserDto, payload);
       const owner = await this.getUserFromSession(client);
 
-      // 밴 로직
-      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner, dto.banReason);
-
-      // 강퇴 로직
-      const { roomUsers, roomUserCount, kickedUser } = await this.socketService.kickUser(dto.roomId, dto.userId, owner);
-
+      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner.userId, dto.banReason);
       await this.removeUserSocket(dto.roomId, dto.userId);
 
+      const [roomUsers, roomUserCount] = await Promise.all([
+        this.socketService.getRoomUsersSummary(dto.roomId),
+        this.redisService.getRoomUserCount(dto.roomId)
+      ]);
+
       this.server.to(dto.roomId.toString()).emit('roomEvent', {
-        msg: `${kickedUser.name} 님을 밴했습니다.`,
+        msg: `사용자를 밴 처리했습니다.`,
         roomUsers,
         roomUserCount,
       });
-
-      this.logger.warn(`밴: Room(${dto.roomId}): Owner(${owner.userId}) -> User(${dto.userId})`);
     } catch (err) {
-      this.logger.error(`밴 에러: ${err.message}`, err.stack);
+      this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${payload?.roomId} | 대상ID:${payload?.userId} | 사유:${err.message}`, err.stack);
       throw new WsException(err.message);
     }
   }

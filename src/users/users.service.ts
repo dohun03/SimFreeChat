@@ -36,9 +36,8 @@ export class UsersService {
   
     try {
       await this.userRepository.save(newUser);
-      this.logger.log(`회원가입: Name: ${name}, Email: ${email}`);
     } catch (err) {
-      this.logger.error('회원가입 에러:', err);
+      this.logger.error(`[USER_CREATE_ERROR] 이메일:${email} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('사용자 생성 중 문제가 발생했습니다.');
     }
   }
@@ -76,7 +75,10 @@ export class UsersService {
     const offset = query.offset ? parseInt(query.offset) : 0;
 
     const admin = await this.userRepository.findOne({ where: { id: userId } });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`[USER_ADMIN_DENIED] 시도자ID:${userId} | 사유:관리자 권한 없음`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
 
     const qb = this.userRepository.createQueryBuilder('u');
     const now = new Date();
@@ -147,25 +149,27 @@ export class UsersService {
 
     try {
       await this.userRepository.save(user);
-      this.logger.log(`프로필 수정: User(${userId}): 변경 항목(${Object.keys(updateUserDto).join(', ')})`);
       const { password, ...safeUser } = user;
       return safeUser;
     } catch (err) {
-      this.logger.error('프로필 수정 에러:', err);
+      this.logger.error(`[USER_UPDATE_ERROR] 유저ID:${userId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
     }
   }
 
   // 특정 사용자 프로필 수정하기 (관리자)
-  async updateUserById(adminId: number, userId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
+  async updateUserById(adminId: number, targetUserId: number, updateUserDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
     const admin = await this.userRepository.findOne({
       where: { id: adminId },
       select: ['id', 'isAdmin']
     });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`[USER_ADMIN_DENIED] 시도자ID:${adminId} | 대상ID:${targetUserId} | 사유:관리자 권한 없음`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
 
     const user = await this.userRepository.findOne({
-      where: { id: userId }
+      where: { id: targetUserId }
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
     if (user.isAdmin) throw new ForbiddenException('관리자 정보는 수정할 수 없습니다.');
@@ -200,50 +204,57 @@ export class UsersService {
 
     try {
       await this.userRepository.save(user);
-      this.logger.warn(`프로필 수정: Admin(${adminId})가 User(${userId}) 정보를 수정함: ${Object.keys(updateUserDto).join(', ')}`);
+      this.logger.warn(`[USER_ADMIN_UPDATE_SUCCESS] 관리자ID:${adminId} | 대상ID:${targetUserId} | 항목:${Object.keys(updateUserDto).join(', ')}`);
 
       const { password, ...safeUser } = user;
       return safeUser;
     } catch (err) {
-      this.logger.error('프로필 수정 에러:', err);
+      this.logger.error(`[USER_ADMIN_UPDATE_ERROR] 관리자ID:${adminId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('사용자 수정 중 문제가 발생했습니다.');
     }
   }
 
   // 특정 사용자 삭제하기 (관리자)
-  async deleteUserById(adminId: number, userId: number): Promise<void> {
+  async deleteUserById(adminId: number, targetUserId: number): Promise<void> {
     const admin = await this.userRepository.findOne({
       where: { id: adminId },
       select: ['id', 'isAdmin']
     });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`[USER_ADMIN_DENIED] 시도자ID:${adminId} | 대상ID:${targetUserId} | 사유:관리자 권한 없음`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
 
     const user = await this.userRepository.findOne({
-      where: { id: userId },
+      where: { id: targetUserId },
       select: ['id', 'isAdmin']
     });
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
     if (user.isAdmin) throw new ForbiddenException('관리자 정보는 삭제할 수 없습니다.');
+    
     try {
-      await this.socketService.leaveAllRooms(userId);
+      await this.socketService.leaveAllRooms(targetUserId);
+      
       const result = await this.userRepository.delete({
-        id: userId,
+        id: targetUserId,
       });
-  
       if (result.affected === 0) throw new BadRequestException('사용자가 존재하지 않거나 권한이 없습니다.');
+      this.logger.warn(`[USER_ADMIN_DELETE_SUCCESS] 관리자ID:${adminId} | 대상ID:${targetUserId}`);
 
-      this.logger.warn(`계정 삭제: Admin(${adminId})가 User(${userId}) 계정을 삭제함.`);
     } catch (err) {
-      this.logger.error('계정 삭제 에러:', err);
+      this.logger.error(`[USER_ADMIN_DELETE_ERROR] 관리자ID:${adminId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('사용자 삭제 중 문제가 발생했습니다.');
     }
   }
 
-  async banUserById(adminId: number, userId: number, data: { reason: string, banDays: number }) {
+  async banUserById(adminId: number, targetUserId: number, data: { reason: string, banDays: number }) {
     const admin = await this.userRepository.findOne({ where: { id: adminId } });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`[USER_ADMIN_DENIED] 시도자ID:${adminId} | 대상ID:${targetUserId} | 사유:관리자 권한 없음`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
 
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: targetUserId } });
     if (!user) throw new NotFoundException('유저를 찾을 수 없습니다.');
     if (user.isAdmin) throw new ForbiddenException('관리자는 밴 할 수 없습니다.');
 
@@ -257,28 +268,34 @@ export class UsersService {
     }
 
     try {
-      await this.userRepository.update(userId, { bannedUntil, banReason: data.reason });
-      this.logger.warn(`계정 밴: Admin(${adminId})가 User(${userId})를 밴함. 기간: ${data.banDays}일, 사유: ${data.reason}`);
+      await this.userRepository.update(targetUserId, { bannedUntil, banReason: data.reason });
+      await this.socketService.leaveAllRooms(targetUserId);
+
+      this.logger.warn(`[USER_ADMIN_BAN_SUCCESS] 관리자ID:${adminId} | 대상ID:${targetUserId} | 기간:${data.banDays}일 | 사유:${data.reason}`);
 
       return { message: '밴 설정 완료' };
+
     } catch (err) {
-      this.logger.error(`계정 밴 에러: Admin(${adminId})의 User(${userId}) 밴 처리 실패`, err.stack);
+      this.logger.error(`[USER_ADMIN_BAN_ERROR] 관리자ID:${adminId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
     }
   }
 
   // 밴 해제 메서드 추가
-  async unbanUserById(adminId: number, userId: number) {
+  async unbanUserById(adminId: number, targetUserId: number) {
     const admin = await this.userRepository.findOne({ where: { id: adminId } });
-    if (!admin?.isAdmin) throw new ForbiddenException('권한이 없습니다.');
+    if (!admin?.isAdmin) {
+      this.logger.warn(`[USER_ADMIN_DENIED] 시도자ID:${adminId} | 대상ID:${targetUserId} | 사유:관리자 권한 없음`);
+      throw new ForbiddenException('권한이 없습니다.');
+    }
 
     try {
-      await this.userRepository.update(userId, { bannedUntil: null, banReason: null });
-      this.logger.log(`계정 밴 해제: Admin(${adminId})가 User(${userId})의 밴을 해제함.`);
-
+      await this.userRepository.update(targetUserId, { bannedUntil: null, banReason: null });
+      this.logger.log(`[USER_ADMIN_UNBAN_SUCCESS] 관리자ID:${adminId} | 대상ID:${targetUserId}`);
       return { message: '밴 해제 완료' };
+      
     } catch (err) {
-      this.logger.error(`계정 밴 해제 에러: Admin(${adminId})의 User(${userId}) 밴 해제 실패`, err.stack);
+      this.logger.error(`[USER_ADMIN_UNBAN_ERROR] 관리자ID:${adminId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('밴 해제 중 오류가 발생했습니다.');
     }
   }

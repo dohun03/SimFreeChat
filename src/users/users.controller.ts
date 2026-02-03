@@ -4,13 +4,11 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 import { BanUserDto } from './dto/ban-user.dto';
-import { SocketService } from 'src/socket/socket.service';
 
 @Controller('users')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly socketService: SocketService,
   ) {}
 
   @Post('register')
@@ -41,10 +39,7 @@ export class UsersController {
     @Body() banUserDto: BanUserDto,
     @Req() req: any
   ) {
-    const result = await this.usersService.banUserById(req.user.userId, userId, banUserDto);
-    await this.socketService.leaveAllRooms(userId);
-
-    return result;
+    return await this.usersService.banUserById(req.user.userId, userId, banUserDto);
   }
 
   @UseGuards(SessionGuard)

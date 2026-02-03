@@ -26,6 +26,7 @@ export async function renderAdminMessageLogs(container, user) {
     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
       <div class="d-flex align-items-center gap-2 mb-1">
         <select id="year-date" class="form-select form-select-sm" style="width: 100px;">
+          <option value="2026">2026</option>
           <option value="2025">2025</option>
           <option value="2024">2024</option>
           <option value="2023">2023</option>

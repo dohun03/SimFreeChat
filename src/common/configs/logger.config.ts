@@ -17,14 +17,33 @@ export const dailyOptions = (level: string) => {
 
 export const winstonConfig = {
   transports: [
+    // 콘솔 출력
     new winston.transports.Console({
       level: process.env.NODE_ENV === 'production' ? 'info' : 'silly',
       format: winston.format.combine(
-        winston.format.timestamp(),
-        utilities.format.nestLike('MY-CHAT', { prettyPrint: true, colors: true }),
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.colorize({ all: true }),
+        winston.format.printf(({ timestamp, level, context, message }) => {
+          return `[${timestamp}] [${level}] [${context || 'System'}] - ${message}`;
+        }),
       ),
     }),
-    new DailyRotateFile(dailyOptions('info')),
-    new DailyRotateFile(dailyOptions('error')),
+
+    // JSON 형식의 파일 저장
+    new DailyRotateFile({
+      ...dailyOptions('info'),
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.json(),
+      ),
+    }),
+
+    new DailyRotateFile({
+      ...dailyOptions('error'),
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.json(),
+      ),
+    }),
   ],
 };

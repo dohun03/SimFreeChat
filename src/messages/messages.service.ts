@@ -60,7 +60,7 @@ export class MessagesService {
         }),
         this.userRepository.findOne({ 
           where: { id: userId },
-          select: ['id', 'name', 'isAdmin', 'bannedUntil', 'createdAt', 'updatedAt']
+          select: ['id', 'name', 'isAdmin']
         }),
       ]);
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
@@ -73,27 +73,15 @@ export class MessagesService {
 
       const message = {
         id: messageId,
-        room: {
-          id: room.id,
-          name: room.name,
-          owner: {
-            id: room.owner.id,
-          }
-        },
-        user: {
-          id: user.id,
-          name: user.name,
-          isAdmin: user.isAdmin,
-          bannedUntil: user.bannedUntil,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
         content: content,
         type: messageType,
         isDeleted: false,
         createdAt: new Date(),
         updatedAt: null,
+        user: { id: user.id, name: user.name, isAdmin: user.isAdmin },
+        room: { id: room.id, name: room.name, ownerId: room.owner?.id },
       };
+      
 
       const messageLog = {
         roomId: room.id,
@@ -109,110 +97,100 @@ export class MessagesService {
       }
 
       await this.redisService.pushMessageAndLog(message, messageLog);
+      return { message, lastMessageId };
 
-      this.logger.log(`메시지 전송 Room(${roomId}) User(${userId})`);
-
-      return {
-        message: { ...message, user },
-        lastMessageId,
-      };
     } catch (err) {
-      this.logger.error('메시지 전송 중 에러:', err);
+      this.logger.error(`[MESSAGE_SEND_ERROR] 방ID:${roomId} | 유저ID:${userId} | 사유:${err.message}`, err.stack);
       if (err instanceof NotFoundException) throw err;
       throw new InternalServerErrorException('메시지 전송 중 문제가 발생했습니다.');
     }
   }
 
   async deleteMessage(roomId: number, userId: number, messageId: string): Promise<string> {
-    // 어디에 있던 캐시 메시지는 삭제.
-    await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
-
     const message = await this.messageRepository.findOne({
       where: { id: messageId, room: { id: roomId }, user: { id: userId } },
       relations: ['room', 'room.owner', 'user'],
     });
 
-    // DB에 메시지가 있음.
-    if (message) {
-      await this.dataSource.transaction(async (manager) => {
-        if (message.isDeleted) {
-          throw new BadRequestException('이미 삭제된 메시지입니다.');
-        }
+    try {
+      // DB에 메시지가 있을 경우
+      if (message) {
+        await this.dataSource.transaction(async (manager) => {
+          if (message.isDeleted) {
+            throw new BadRequestException('이미 삭제된 메시지입니다.');
+          }
 
-        await manager.update(Message, messageId, { isDeleted: true });
-        await manager.insert(MessageLog, {
-          roomId: message.room.id,
-          roomName: message.room.name,
-          roomOwnerId: message.room.owner?.id,
-          userId: message.user.id,
-          userName: message.user.name,
-          messageId: message.id,
-          messageContent: message.content,
-          type: message.type,
-          action: 'DELETE',
-          createdAt: new Date(),
+          await manager.update(Message, messageId, { isDeleted: true });
+          await manager.insert(MessageLog, {
+            roomId: message.room.id,
+            roomName: message.room.name,
+            roomOwnerId: message.room.owner?.id,
+            userId: message.user.id,
+            userName: message.user.name,
+            messageId: message.id,
+            messageContent: message.content,
+            type: message.type,
+            action: 'DELETE',
+            createdAt: new Date(),
+          });
+          await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
         });
-      });
-    } else {
-      await this.redisService.deleteMessageAndLog(roomId, userId, messageId);
-    }
+      } else { // Redis에만 있을 경우
+        await this.redisService.deleteMessageAndLog(roomId, userId, messageId);
+        await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
+      }
 
-    return messageId;
+      return messageId;
+
+    } catch (err) {
+      this.logger.error(`[MESSAGE_DELETE_ERROR] 방ID:${roomId} | 유저ID:${userId} | 메시지ID:${messageId} | 사유:${err.message}`,err.stack);
+      throw new InternalServerErrorException('메시지 삭제 중 오류가 발생했습니다.');
+    }
   }
   
   async getMessagesByRoom(roomId: number, query: any): Promise<ResponseMessageDto[]> {
     const { cursor, direction } = query;
     const limit = 100;
 
-    const qb = this.messageRepository
-      .createQueryBuilder('m')
-      .leftJoinAndSelect('m.user', 'u')
-      .where('m.room_id = :roomId', { roomId });
-
-    // DB 메시지 반환
-    if (cursor) {
-      if (direction === 'before') {
-        qb.andWhere('m.id < :cursor', { cursor }).orderBy('m.id', 'DESC');
-      }
-      else if (direction === 'recent') {
-        qb.andWhere('m.id > :cursor', { cursor }).orderBy('m.id', 'ASC');
-      }
-    }
     // 캐시 메시지 반환
-    else {
+    if (!cursor) {
       const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
       if (cachedMessages.length > 0) return cachedMessages;
     }
 
-    const messages = await qb.limit(limit).getMany();
-    
-    const result = messages.map((msg) => {
-      const { password, ...safeUser } = msg.user;
-      return { ...msg, user: safeUser };
-    });
+    // DB 메시지 반환
+    const qb = this.messageRepository
+      .createQueryBuilder('m')
+      .leftJoinAndSelect('m.user', 'u')
+      .select(['m', 'u.id', 'u.name', 'u.isAdmin'])
+      .where('m.room_id = :roomId', { roomId });
 
-    return direction === 'recent' ? result.reverse() : result;
+    if (direction === 'before') {
+      qb.andWhere('m.id < :cursor', { cursor }).orderBy('m.id', 'DESC');
+    }
+    else if (direction === 'recent') {
+      qb.andWhere('m.id > :cursor', { cursor }).orderBy('m.id', 'ASC');
+    }
+
+    const messages = await qb.limit(limit).getMany();
+
+    return direction === 'recent' ? messages.reverse() : messages;
   }
   
   async getAiMessagesSummary(roomId: number) {
     const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
-    
-    if (!cachedMessages || cachedMessages.length === 0) {
-      return { summary: "요약할 대화 내용이 없습니다." };
-    }
+    if (!cachedMessages?.length) return { summary: "내용 없음" };
 
     // 데이터 포맷팅
     const chatContext = cachedMessages
       .filter(msg => !msg.isDeleted && msg.type === 'text')
+      .slice(0, 50)
       .reverse()
       .map(msg => `${msg.user.name}: ${msg.content}`)
       .join('\n');
-    if (!chatContext) return { summary: "요약할 수 있는 텍스트 메시지가 없습니다." };
-
+      
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel(
-      { model: "gemini-3-flash-preview" }
-    );
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     // 프롬프트 작성 (데이터 주입)
     const prompt = `
@@ -237,180 +215,89 @@ export class MessagesService {
 
       const duration = Date.now() - startTime;
 
-      this.logger.log(`Room(${roomId}) 요약 성공 - 소요시간: ${duration}ms`);
+      this.logger.log(`[AI_SUMMARY_SUCCESS] 방ID:${roomId} | 소요시간:${duration}ms`);
 
       return { summary: summaryText };
-    } catch (error) {
-      this.logger.error(`Room(${roomId}) 요약 실패: ${error.message}`, error.stack);
+    } catch (err) {
+      this.logger.error(`[AI_SUMMARY_ERROR] 방ID:${roomId} | 사유:${err.message}`, err.stack);
       return { summary: "AI 요약 중 오류가 발생했습니다." };
     }
   }
-  
-  async getAllMessageLogs(
-    userId: number,
-    query: any
-  ): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
-    const admin = await this.userRepository.findOne({ where: { id: userId } });
+
+  async getAllMessageLogs(userId: number, query: any): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
+    const admin = await this.userRepository.findOne({ 
+      where: { id: userId }, 
+      select: ['id', 'isAdmin'] 
+    });
     if (!admin?.isAdmin) {
-      this.logger.warn(`비정상적인 로그 접근 시도: UserID(${userId})`);
+      this.logger.warn(`[ADMIN_ACCESS_DENIED] 유저ID:${userId} | 사유:권한없음`);
       throw new ForbiddenException('권한이 없습니다.');
     }
-  
+
     try {
       const {
-        search,
-        searchType,
-        startDate,
-        endDate,
-        messageType,
-        actionType,
-        roomIdType,
-        roomOwnerIdType,
-        userIdType,
-        line,
-        cursor,
-        direction,
+        search, searchType, startDate, endDate,
+        messageType, actionType, roomIdType, 
+        roomOwnerIdType, userIdType, line, cursor, direction,
       } = query;
-  
-      const rawQb = this.messageLogRepository.createQueryBuilder('log');
-      const countQb = this.messageLogRepository.createQueryBuilder('log');
 
-      if (direction === 'prev') {
-        rawQb
-          .andWhere('log.id > :cursor', { cursor })
-          .orderBy('log.created_at', 'ASC')
-          .addOrderBy('log.id', 'ASC');
-      } else if (direction === 'next') {
-        rawQb
-          .andWhere('log.id < :cursor', { cursor })
-          .orderBy('log.created_at', 'DESC')
-          .addOrderBy('log.id', 'DESC');
-      } else {
-        rawQb
-        .orderBy('log.created_at', 'DESC')
-          .addOrderBy('log.id', 'DESC');
-      }
-  
-      // 검색 조건
+      const qb = this.messageLogRepository.createQueryBuilder('log');
+
       if (search) {
-        switch (searchType) {
-          case 'message':
-            rawQb.andWhere('log.message_content LIKE :search', {
-              search: `%${search}%`,
-            });
-            countQb.andWhere('log.message_content LIKE :search', {
-              search: `%${search}%`,
-            });
-            break;
-  
-          case 'user':
-            rawQb.andWhere('log.user_name LIKE :search', {
-              search: `%${search}%`,
-            });
-            countQb.andWhere('log.user_name LIKE :search', {
-              search: `%${search}%`,
-            });
-            break;
-  
-          case 'room':
-            rawQb.andWhere('log.room_name LIKE :search', {
-              search: `%${search}%`,
-            });
-            countQb.andWhere('log.room_name LIKE :search', {
-              search: `%${search}%`,
-            });
-            break;
-  
-          default:
-            rawQb.andWhere(
-              '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)',
-              { search: `%${search}%` },
-            );
-            countQb.andWhere(
-              '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)',
-              { search: `%${search}%` },
-            );
-            break;
+        const target = searchType 
+          ? ({ message: 'log.message_content', user: 'log.user_name', room: 'log.room_name' }[searchType]) 
+          : '(log.message_content LIKE :search OR log.user_name LIKE :search OR log.room_name LIKE :search)';
+
+        if (!searchType) {
+          qb.andWhere(target, { search: `%${search}%` });
+        } else {
+          qb.andWhere(`${target} LIKE :search`, { search: `%${search}%` });
         }
       }
-  
-      // 날짜 조건
-      if (startDate) {
-        rawQb.andWhere('log.created_at >= :startDate', { startDate });
-        countQb.andWhere('log.created_at >= :startDate', { startDate });
-      }
-      if (endDate) {
-        rawQb.andWhere('log.created_at <= :endDate', {
-          endDate: `${endDate} 23:59:59`,
-        });
-        countQb.andWhere('log.created_at <= :endDate', {
-          endDate: `${endDate} 23:59:59`,
-        });
+      if (startDate) qb.andWhere('log.created_at >= :startDate', { startDate });
+      if (endDate) qb.andWhere('log.created_at <= :endDate', { endDate: `${endDate} 23:59:59` });
+      if (messageType) qb.andWhere('log.type = :messageType', { messageType });
+      if (actionType) qb.andWhere('log.action = :actionType', { actionType });
+      if (roomIdType) qb.andWhere('log.room_id = :roomIdType', { roomIdType });
+      if (roomOwnerIdType) qb.andWhere('log.room_owner_id = :roomOwnerIdType', { roomOwnerIdType });
+      if (userIdType) qb.andWhere('log.user_id = :userIdType', { userIdType });
+
+      const dataQb = qb.clone();
+
+      if (direction === 'prev') {
+        dataQb.andWhere('log.id > :cursor', { cursor }).orderBy('log.id', 'ASC');
+      } else {
+        if (cursor) dataQb.andWhere('log.id < :cursor', { cursor });
+        dataQb.orderBy('log.id', 'DESC');
       }
 
-      // 메시지 타입 조건
-      if (messageType) {
-        rawQb.andWhere('log.type = :type', { type: messageType });
-        countQb.andWhere('log.type = :type', { type: messageType });
-      }
-      
-      // 액션 타입 조건
-      if (actionType) {
-        rawQb.andWhere('log.action = :action', { action: actionType });
-        countQb.andWhere('log.action = :action', { action: actionType });
-      }
+      const messageLogs = await dataQb.limit(Number(line) || 100).getMany();
 
-      // 방 ID 조건
-      if (roomIdType) {
-        rawQb.andWhere('log.room_id = :roomId', { roomId: roomIdType });
-        countQb.andWhere('log.room_id = :roomId', { roomId: roomIdType });
-      }
+      if (direction === 'prev') messageLogs.reverse();
 
-      // 방장 ID 조건
-      if (roomOwnerIdType) {
-        rawQb.andWhere('log.room_owner_id = :roomOwnerId', { roomOwnerId: roomOwnerIdType });
-        countQb.andWhere('log.room_owner_id = :roomOwnerId', { roomOwnerId: roomOwnerIdType });
-      }
-      
-      // 사용자 ID 조건
-      if (userIdType) {
-        rawQb.andWhere('log.user_id = :userId', { userId: userIdType });
-        countQb.andWhere('log.user_id = :userId', { userId: userIdType });
-      }
-  
-      // raw 데이터 조회 (항상 실행)
-      const messageLogs = await rawQb
-        .limit(Number(line) || 100)
-        .getMany();
-
+      // 카운트 캐싱 로직
       const currentQueryStr = JSON.stringify({
         search, searchType, startDate, endDate, messageType,
         actionType, roomIdType, roomOwnerIdType, userIdType,
       });
 
       const cachedData = await this.redisService.getUserQueryCache(userId);
-
       let totalCount: number;
 
-      // 쿼리 조건 일치하는지 확인
+      // 캐시 적중 시 COUNT 쿼리 생략
       if (cachedData && cachedData.queryStr === currentQueryStr) {
         totalCount = cachedData.totalCount;
       } else {
-        const row = await countQb
-          .select('COUNT(log.created_at)', 'totalCount')
-          .getRawOne();
-        
-        totalCount = Number(row.totalCount);
-
+        const row = await qb.select('COUNT(log.id)', 'count').getRawOne();
+        totalCount = Number(row.count);
         await this.redisService.setUserQueryCache(userId, currentQueryStr, totalCount);
       }
 
       return { messageLogs, totalCount };
+
     } catch (err) {
-      this.logger.error('메시지 로그 조회 중 오류 발생:', err);
-      throw new InternalServerErrorException(
-        '메시지 로그 조회 중 문제가 발생했습니다.',
-      );
+      this.logger.error(`[GET_LOGS_ERROR] 유저ID:${userId} | 사유:${err.message}`, err.stack);
+      throw new InternalServerErrorException('로그 조회 중 문제가 발생했습니다.');
     }
   }
 
