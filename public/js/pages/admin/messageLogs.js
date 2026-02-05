@@ -220,6 +220,7 @@ export async function renderAdminMessageLogs(container, user) {
     try {
       const payload = getQueryPayload(cursor, direction);
       const queryString = new URLSearchParams(payload).toString();
+      console.log(queryString);
       const res = await fetch(`/api/messages/logs?${queryString}`, { method: 'GET', credentials: 'include' });
       if (!res.ok) throw new Error('메시지 로그를 불러오는 중 오류 발생');
 

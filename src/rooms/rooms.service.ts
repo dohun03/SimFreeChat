@@ -112,7 +112,7 @@ export class RoomsService {
     if (!hasLock) return;
 
     const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 1);
 
     try {
       const expiredRooms = await this.roomRepository.find({

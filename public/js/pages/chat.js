@@ -350,6 +350,7 @@ export async function renderChatRoom(container, user, roomId) {
         url += `?direction=recent&cursor=${lastId}`;
       }
 
+      console.log('url: ',url);
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error('Network response was not ok');
@@ -360,14 +361,27 @@ export async function renderChatRoom(container, user, roomId) {
           return; 
         }
 
+        if (direction === 'init' || direction === 'recent') {
+          serverLastMessageId = Number(messages[messages.length - 1].id);
+        }
+
         const fragment = document.createDocumentFragment();
-        [...messages].reverse().forEach(msg => {
-          fragment.appendChild(createMessageElement(msg, user.id));
+        messages.forEach(msg => {
+          const msgElem = createMessageElement(msg, user.id);
+          
+          if (direction === 'before') {
+            // [9, 8, 7] 순서로 올 때, 9 넣고 그 위에 8, 그 위에 7...
+            // 결과적으로 화면 제일 위가 7번(가장 과거)이 됨
+            fragment.prepend(msgElem); 
+          } else {
+            // [11, 12, 13] 순서로 올 때, 11 넣고 그 뒤에 12, 그 뒤에 13...
+            // 결과적으로 화면 제일 아래가 13번(가장 최신)이 됨
+            fragment.appendChild(msgElem);
+          }
         });
 
         if (direction === 'before') {
           const beforeTop = firstMessage?.getBoundingClientRect().top;
-
           messagesList.prepend(fragment);
           keepMessageLimit('before');
 
@@ -465,7 +479,7 @@ export async function renderChatRoom(container, user, roomId) {
         }
       }
 
-      serverLastMessageId = lastMessageId;
+      serverLastMessageId = Number(lastMessageId);
     });
 
     socket.on('messageDeleted', id => {
@@ -504,10 +518,6 @@ export async function renderChatRoom(container, user, roomId) {
     });
 
     // # 스크롤 감지
-    function isAtTop(scrollGap = 50) {
-      return chatMessages.scrollTop <= scrollGap;
-    }
-
     function isAtBottom(scrollGap = 50) {
       return chatMessages.scrollTop + chatMessages.clientHeight >= chatMessages.scrollHeight - scrollGap;
     }
@@ -528,19 +538,18 @@ export async function renderChatRoom(container, user, roomId) {
         return;
       }
 
-      // BOTTOM
-      if (
-        !bottomLock &&
-        chatMessages.scrollTop + chatMessages.clientHeight >=
-          chatMessages.scrollHeight - 5
-      ) {
-        bottomLock = true;
+      // BOTTOM 
+      if (!bottomLock && isAtBottom(5)) {
+        const myLastId = Number(messagesList.lastElementChild?.dataset.id || 0);
 
-        loadMessages('recent').finally(() => {
-          setTimeout(() => {
-            bottomLock = false;
-          }, 100);
-        });
+        if (myLastId < serverLastMessageId) {
+          bottomLock = true;
+          loadMessages('recent').finally(() => {
+            setTimeout(() => {
+              bottomLock = false;
+            }, 100);
+          });
+        }
       }
     });
 

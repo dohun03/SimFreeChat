@@ -78,10 +78,17 @@ export class MessagesService {
         isDeleted: false,
         createdAt: new Date(),
         updatedAt: null,
-        user: { id: user.id, name: user.name, isAdmin: user.isAdmin },
-        room: { id: room.id, name: room.name, ownerId: room.owner?.id },
+        user: {
+          id: user.id,
+          name: user.name,
+          isAdmin: user.isAdmin
+        },
+        room: { 
+          id: room.id, 
+          name: room.name, 
+          owner: { id: room.owner?.id } 
+        },
       };
-      
 
       const messageLog = {
         roomId: room.id,
@@ -97,6 +104,7 @@ export class MessagesService {
       }
 
       await this.redisService.pushMessageAndLog(message, messageLog);
+
       return { message, lastMessageId };
 
     } catch (err) {
@@ -174,7 +182,7 @@ export class MessagesService {
 
     const messages = await qb.limit(limit).getMany();
 
-    return direction === 'recent' ? messages.reverse() : messages;
+    return messages;
   }
   
   async getAiMessagesSummary(roomId: number) {
@@ -272,8 +280,6 @@ export class MessagesService {
       }
 
       const messageLogs = await dataQb.limit(Number(line) || 100).getMany();
-
-      if (direction === 'prev') messageLogs.reverse();
 
       // 카운트 캐싱 로직
       const currentQueryStr = JSON.stringify({

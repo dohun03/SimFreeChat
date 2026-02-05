@@ -26,7 +26,7 @@ export class RedisService implements OnModuleInit {
       const roomKeys = await this.redis.keys('room:users:*');
       const socketKeys = await this.redis.keys('user:sockets:*');
       const userRoomKeys = await this.redis.keys('user:rooms:*');
-      const keysToDelete = [...roomKeys, ...socketKeys];
+      const keysToDelete = [...roomKeys, ...socketKeys, ...userRoomKeys];
 
       if (keysToDelete.length > 0) {
         await this.redis.del(...keysToDelete);
@@ -167,7 +167,7 @@ export class RedisService implements OnModuleInit {
   // [방별 캐시 메시지의 마지막 ID 조회]
   async getLastMessageId(roomId: number): Promise<string | undefined> {
     const key = `room:messages:${roomId}`;
-    const latest = await this.redis.lindex(key, 0);
+    const latest = await this.redis.lindex(key, -1);
     if (!latest) return undefined;
     try {
       return JSON.parse(latest).id;
@@ -208,16 +208,15 @@ export class RedisService implements OnModuleInit {
   // [버퍼 메시지&로그 저장]
   async pushMessageAndLog(messageData: any, logData: any) {
     const roomId = messageData.room.id;
-    const cacheKey = `room:messages:${roomId}`;
     const multi = this.redis.multi();
 
     // DB 저장용 버퍼에 추가
-    multi.lpush('buffer:messages', JSON.stringify(messageData));
-    multi.lpush('buffer:logs', JSON.stringify(logData));
+    multi.rpush('buffer:messages', JSON.stringify(messageData));
+    multi.rpush('buffer:logs', JSON.stringify(logData));
 
     // 조회용 최신 100개 캐시 유지
-    multi.lpush(cacheKey, JSON.stringify(messageData));
-    multi.ltrim(cacheKey, 0, 99);
+    multi.rpush(`room:messages:${roomId}`, JSON.stringify(messageData));
+    multi.ltrim(`room:messages:${roomId}`, -100, -1);
 
     const results = await multi.exec();
 
@@ -268,7 +267,7 @@ export class RedisService implements OnModuleInit {
     msgObj.isDeleted = true;
 
     multi.lset(bufferKey, index, JSON.stringify(msgObj));
-    multi.lpush(logKey, JSON.stringify(deleteLog));
+    multi.rpush(logKey, JSON.stringify(deleteLog));
     await multi.exec();
     
     return true;
