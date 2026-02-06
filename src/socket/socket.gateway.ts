@@ -62,12 +62,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
   // 소켓 추가
-  async addUserSocket(userId: number, socketId: string, roomId: number) {
+  private async addUserSocket(userId: number, socketId: string, roomId: number) {
     await this.redisService.hSetUserSocket(userId, socketId, roomId);
   }
 
   // 강제 소켓 삭제 (강퇴/밴/로그아웃 등)
-  async removeUserSocket(roomId: number, userId: number) {
+  private async removeUserSocket(roomId: number, userId: number) {
     // 1. Redis: 이 유저의 소켓 ID, 방 ID 필드 가져옴
     const socketMap = await this.redisService.hGetAllUserSockets(userId);
 

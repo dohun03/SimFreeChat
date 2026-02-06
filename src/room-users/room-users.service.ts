@@ -27,28 +27,31 @@ export class RoomUsersService {
       }),
     ]);
 
-    // 2. 권한 및 상태 체크
+    // 권한 및 상태 체크
     if (!room || room.owner.id !== ownerId) throw new ForbiddenException('방장 권한이 없습니다.');
     if (room.owner.id === targetUserId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
     if (roomUser?.isBanned) throw new BadRequestException('이미 밴 상태인 유저입니다.');
     
-    try {
-      const targetUser = roomUser || this.roomUserRepository.create({
-        room: { id: roomId },
-        user: { id: targetUserId },
-      });
+    // 작업 시작
+    await this.roomUserRepository.manager.transaction(async (transaction) => {
+      try {
+        const targetUser = roomUser || this.roomUserRepository.create({
+          room: { id: roomId },
+          user: { id: targetUserId },
+        });
+        targetUser.isBanned = true;
+        targetUser.banReason = banReason;
 
-      targetUser.isBanned = true;
-      targetUser.banReason = banReason;
+        await transaction.save(targetUser);
+        await this.redisService.clearUserRoomRelations(roomId, targetUserId);
+        
+        this.logger.log(`[ROOM_USER_BAN_SUCCESS] 방ID:${roomId} | 대상ID:${targetUserId}`);
 
-      await this.roomUserRepository.save(targetUser);
-      
-      this.logger.log(`[ROOM_USER_BAN_SUCCESS] 방ID:${roomId} | 대상ID:${targetUserId}`);
-
-    } catch (err) {
-      this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
-      throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
-    }
+      } catch (err) {
+        this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
+        throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
+      }
+    });
   }
 
   async unBanUserById(roomId: number, targetUserId: number, ownerId: number): Promise<boolean> {

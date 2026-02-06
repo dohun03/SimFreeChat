@@ -124,6 +124,20 @@ export class RedisService implements OnModuleInit {
     return this.redis.sismember(`room:users:${roomId}`, userId);
   }
 
+  // 2.5. 유저+방 관련 데이터 삭제
+  async clearUserRoomRelations(roomId: number, userId: number): Promise<void> {
+    const multi = this.redis.multi();
+    
+    multi.srem(`room:users:${roomId}`, userId);
+    multi.srem(`user:rooms:${userId}`, roomId);
+
+    const results = await multi.exec();
+    
+    if (!results) {
+      throw new Error('Redis 트랜잭션 실행 실패');
+    }
+  }
+
   // 3. 유저별 방 관리
   async addRoomToUser(userId: number, roomId: number) {
     await this.redis.sadd(`user:rooms:${userId}`, roomId);

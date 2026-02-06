@@ -82,26 +82,42 @@ export class RoomsService {
   }
 
   // 방 임시 삭제
-  async softDeleteRoom(roomId: number, userId: number): Promise<void> {
-    try {
-      const result = await this.roomRepository.softDelete({
-        id: roomId,
-        owner: { id: userId }
-      });
-      if (result.affected === 0) {
-        this.logger.warn(`[ROOM_DELETE_DENIED] 권한 없음 | 방ID:${roomId} | 유저ID:${userId}`);
-        throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+  async softDeleteRoom(roomId: number, ownerId: number): Promise<void> {
+    await this.roomRepository.manager.transaction(async (transaction) => {
+      try {
+        const result = await transaction.softDelete(Room, {
+          id: roomId,
+          owner: { id: ownerId }
+        });
+        if (result.affected === 0) {
+          this.logger.warn(`[ROOM_DELETE_DENIED] 권한 없음 | 방ID:${roomId} | 유저ID:${ownerId}`);
+          throw new BadRequestException('방이 존재하지 않거나 권한이 없습니다.');
+        }
+
+        const roomUsersArray = await this.redisService.getRoomUsers(roomId);
+
+        if (roomUsersArray.length > 0) {
+          await Promise.all(
+            roomUsersArray.map(async (uidStr) => {
+              const uid = Number(uidStr);
+
+              this.socketEvents.deleteRoom(roomId, uid);
+              await this.redisService.clearUserRoomRelations(roomId, uid);
+            })
+          );
+        }
+
+        await this.redisService.deleteRoom(roomId);
+
+        this.logger.log(`[ROOM_SOFT_DELETE] 방ID:${roomId} | 유저ID:${ownerId} | 퇴장인원:${roomUsersArray.length}명`);
+
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+        
+        this.logger.error(`[ROOM_SOFT_DELETE_ERROR] 방ID:${roomId} | 유저ID:${ownerId} | 사유:${err.message}`, err.stack);
+        throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
       }
-
-      const roomUsersArray = await this.redisService.getRoomUsers(roomId);
-      roomUsersArray.forEach(uid => this.socketEvents.deleteRoom(roomId, Number(uid)));
-
-      this.logger.log(`[ROOM_SOFT_DELETE] 방ID:${roomId} | 유저ID:${userId} | 퇴장인원:${roomUsersArray.length}명`);
-
-    } catch (err) {
-      this.logger.error(`[ROOM_SOFT_DELETE_ERROR] 방ID:${roomId} | 유저ID:${userId} | 사유:${err.message}`, err.stack);
-      throw new InternalServerErrorException('방 삭제 중 문제가 발생했습니다.');
-    }
+    });
   }
 
   // 방 영구 삭제 스케줄러
@@ -133,7 +149,6 @@ export class RoomsService {
             .catch(e => this.logger.warn(`[ROOM_FILE_DELETE_ERROR] 방ID:${room.id} | 사유:파일 제거 실패`));
         }
 
-        await this.redisService.deleteRoom(room.id);
         await this.redisService.deleteAllCacheMessagesByRoom(room.id);
 
         this.logger.log(`[ROOM_DELETE_SUCCESS] 방ID:${room.id} | 영구 삭제 및 캐시 정리 완료`);
