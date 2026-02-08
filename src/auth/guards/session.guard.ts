@@ -11,7 +11,7 @@ export class SessionGuard implements CanActivate {
 
     if (!sessionId) throw new UnauthorizedException('세션이 존재하지 않습니다.');
 
-    const session = await this.redisService.getSession(sessionId);
+    const session = await this.redisService.getUserSession(sessionId);
 
     if (!session) throw new UnauthorizedException('유효하지 않은 세션입니다.');
 

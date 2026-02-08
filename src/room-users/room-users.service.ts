@@ -43,7 +43,7 @@ export class RoomUsersService {
         targetUser.banReason = banReason;
 
         await transaction.save(targetUser);
-        await this.redisService.clearUserRoomRelations(roomId, targetUserId);
+        await this.redisService.delUserRoomRelation(roomId, targetUserId);
         
         this.logger.log(`[ROOM_USER_BAN_SUCCESS] 방ID:${roomId} | 대상ID:${targetUserId}`);
 

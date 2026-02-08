@@ -30,9 +30,9 @@ import { Logger } from '@nestjs/common';
     origin: process.env.SERVER_URL,
     credentials: true,
   },
-  transport: ['websocket'],
-  pingInterval: 60000 * 1,  // 1분마다 ping
-  pingTimeout: 60000 * 2,   // 2분 동안 pong 없으면 연결 끊음
+  transports: ['websocket'],
+  pingInterval: 15000,
+  pingTimeout: 5000,
 })
 
 export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -48,35 +48,44 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly redisService: RedisService,
   ) {}
   
-  handleConnection(client: Socket) {}
+  async handleConnection(client: Socket) {
+    try {
+      const user = await this.getUserFromSession(client);
+      client.data.userId = user.userId;
+      client.data.userName = user.name;
+    } catch (err) {
+      this.logger.warn(`[CONNECTION_ERROR] 소켓ID: ${client.id} | 사유: ${err.message}`);
+      client.disconnect(true);
+    }
+  }
 
   async handleDisconnect(client: Socket) {
     const userId = client.data.userId;
 
     if (userId) {
       try {
-        await this.redisService.hDelUserSocket(userId, client.id);
+        await this.redisService.delUserSocket(userId, client.id);
       } catch (err) {
-        this.logger.error(`[ROOM_SOCKET_DISCONNECT_ERROR] 유저ID:${userId} | 소켓ID:${client.id} | 사유:${err.message}`);
+        this.logger.error(`[DISCONNECT_ERROR] 유저ID:${userId} | 소켓ID:${client.id} | 사유:${err.message}`);
       }
     }
   }
   // 소켓 추가
   private async addUserSocket(userId: number, socketId: string, roomId: number) {
-    await this.redisService.hSetUserSocket(userId, socketId, roomId);
+    await this.redisService.setUserSocket(userId, socketId, roomId);
   }
 
   // 강제 소켓 삭제 (강퇴/밴/로그아웃 등)
   private async removeUserSocket(roomId: number, userId: number) {
     // 1. Redis: 이 유저의 소켓 ID, 방 ID 필드 가져옴
-    const socketMap = await this.redisService.hGetAllUserSockets(userId);
+    const socketMap = await this.redisService.getUserSockets(userId);
 
     for (const [sId, rId] of Object.entries(socketMap)) {
       if (Number(rId) === roomId) {
         // 2. Redis Adapter: 모든 프로세스에서 소켓 ID를 찾아 연결 끊기
         this.server.to(sId).emit('forcedDisconnect', { msg: "채팅방과 연결이 끊겼습니다." });
         this.server.in(sId).disconnectSockets(true);
-        await this.redisService.hDelUserSocket(userId, sId);
+        await this.redisService.delUserSocket(userId, sId);
       }
     }
   }
@@ -91,7 +100,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
     if (!sessionId) throw new Error('세션이 존재하지 않습니다.');
   
-    const user = await this.redisService.getSession(sessionId);
+    const user = await this.redisService.getUserSession(sessionId);
     if (!user) throw new Error('세션 정보가 없습니다.');
   
     return user;
@@ -119,16 +128,16 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
+      const userId = client.data.userId; 
+      if (!userId) throw new Error('인증되지 않은 사용자입니다.');
+
       const dto = await this.validateDto(JoinRoomDto, payload);
-      const user = await this.getUserFromSession(client);
       const { roomId, password } = dto;
-      
-      client.data.userId = user.userId;
 
-      const { roomUsers, afterCount, joinUser } = await this.socketService.joinRoom(roomId, user.userId, password);
+      const { roomUsers, afterCount, joinUser } = await this.socketService.joinRoom(roomId, userId, password);
 
-      await this.removeUserSocket(roomId, user.userId);
-      await this.addUserSocket(user.userId, client.id, roomId);
+      await this.removeUserSocket(roomId, userId);
+      await this.addUserSocket(userId, client.id, roomId);
       client.join(roomId.toString());
   
       this.server.to(roomId.toString()).emit('roomEvent', {
@@ -146,13 +155,14 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('leaveRoom')
   async handleLeaveRoom(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
+      const userId = client.data.userId;
+      if (!userId) throw new Error('인증되지 않은 사용자입니다.');
+
       const dto = await this.validateDto(LeaveRoomDto, payload);
-      const user = await this.getUserFromSession(client);
-      const { roomUsers, roomUserCount, leaveUser } = await this.socketService.leaveRoom(dto.roomId, user.userId);
+      const { roomUsers, roomUserCount, leaveUser } = await this.socketService.leaveRoom(dto.roomId, userId);
 
       client.leave(dto.roomId.toString());
   
-      // 방 전체에 퇴장 메시지 전송
       this.server.to(dto.roomId.toString()).emit('roomEvent', {
         msg: `${leaveUser.name} 님이 퇴장했습니다.`,
         roomUsers,
@@ -199,10 +209,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('sendMessage')
   async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
+      const userId = client.data.userId;
+      if (!userId) throw new Error('인증되지 않은 사용자입니다.');
+
       const dto = await this.validateDto(SendMessageDto, payload);
-      const user = await this.getUserFromSession(client);
       
-      const message = await this.messagesService.createMessage(dto.roomId, user.userId, dto.content, dto.type);
+      const message = await this.messagesService.createMessage(dto.roomId, userId, dto.content, dto.type);
   
       this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
@@ -213,14 +225,34 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('deleteMessage')
   async handleDeleteMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
+      const userId = client.data.userId;
+      if (!userId) throw new Error('인증되지 않은 사용자입니다.');
+
       const dto = await this.validateDto(DeleteMessageDto, payload);
-      const user = await this.getUserFromSession(client);
-      const messageId = await this.messagesService.deleteMessage(dto.roomId, user.userId, dto.messageId);
+      const messageId = await this.messagesService.deleteMessage(dto.roomId, userId, dto.messageId);
   
       this.server.to(dto.roomId.toString()).emit('messageDeleted', messageId);
     } catch (err) {
       this.logger.error(`[MESSAGE_DELETE_ERROR] 방ID:${payload?.roomId} | 메시지ID:${payload?.messageId} | 유저ID:${client.data.userId} | 사유:${err.message}`);
       throw new WsException(err.message);
+    }
+  }
+
+  @SubscribeMessage('request_sync')
+  async handleSyncMessages(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { roomId: number; lastMessageId: string } // string으로 변경
+  ) {
+    const { roomId, lastMessageId } = payload;
+    if (!roomId || !lastMessageId) return;
+
+    const missedMessages = await this.messagesService.getMissedMessages(roomId, lastMessageId);
+    
+    if (missedMessages.length > 0) {
+      client.emit('sync_messages', {
+        roomId,
+        messages: missedMessages,
+      });
     }
   }
 

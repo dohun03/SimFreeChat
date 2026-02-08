@@ -43,7 +43,7 @@ export class AuthService {
 
     try {
       const sessionId = uuid();
-      await this.redisService.createSession(sessionId, { 
+      await this.redisService.setUserSession(sessionId, { 
         userId: user.id,
         userName: user.name,
         isAdmin: user.isAdmin,
@@ -69,7 +69,7 @@ export class AuthService {
   async logOut(sessionId: string): Promise<void> {
     try {
       if (sessionId) {
-        await this.redisService.deleteSession(sessionId);
+        await this.redisService.delUserSession(sessionId);
       }
     } catch (err) {
       this.logger.error(`[AUTH_LOGOUT_ERROR] 세션ID:${sessionId} | 사유:${err.message}`);

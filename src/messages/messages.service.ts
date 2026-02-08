@@ -65,7 +65,7 @@ export class MessagesService {
       ]);
       if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
 
-      const lastMessageId = await this.redisService.getLastMessageId(roomId);
+      const lastMessageId = await this.redisService.getRoomLastMessageId(roomId);
       
       const messageId = this.generateCustomId();
       const messageType: MessageType = type === 'image' ? MessageType.IMAGE : MessageType.TEXT;
@@ -141,11 +141,11 @@ export class MessagesService {
             action: 'DELETE',
             createdAt: new Date(),
           });
-          await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
+          await this.redisService.delRoomMessageCache(roomId, messageId);
         });
       } else { // Redis에만 있을 경우
-        await this.redisService.deleteMessageAndLog(roomId, userId, messageId);
-        await this.redisService.deleteCacheMessageByRoom(roomId, messageId);
+        await this.redisService.delMessageAndLog(roomId, userId, messageId);
+        await this.redisService.delRoomMessageCache(roomId, messageId);
       }
 
       return messageId;
@@ -162,7 +162,7 @@ export class MessagesService {
 
     // 캐시 메시지 반환
     if (!cursor) {
-      const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
+      const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
       if (cachedMessages.length > 0) return cachedMessages;
     }
 
@@ -184,9 +184,25 @@ export class MessagesService {
 
     return messages;
   }
-  
+
+  async getMissedMessages(roomId: number, lastMessageId: string): Promise<ResponseMessageDto[]> {
+    try {
+      const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
+      const missedMessages = cachedMessages
+        .filter(msg => msg.id > lastMessageId)
+        .sort((a, b) => (a.id > b.id ? 1 : -1));
+
+      //캐시 범위 벗어나면 DB조회 해야할까..?
+
+      return missedMessages;
+    } catch (err) {
+      this.logger.error(`[GET_MISSED_MESSAGES_ERROR] 방ID:${roomId} | 사유:${err.message}`);
+      return [];
+    }
+  }
+
   async getAiMessagesSummary(roomId: number) {
-    const cachedMessages = await this.redisService.getCacheMessagesByRoom(roomId);
+    const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
     if (!cachedMessages?.length) return { summary: "내용 없음" };
 
     // 데이터 포맷팅
@@ -287,7 +303,7 @@ export class MessagesService {
         actionType, roomIdType, roomOwnerIdType, userIdType,
       });
 
-      const cachedData = await this.redisService.getUserQueryCache(userId);
+      const cachedData = await this.redisService.getUserLogQueryCache(userId);
       let totalCount: number;
 
       // 캐시 적중 시 COUNT 쿼리 생략
@@ -296,7 +312,7 @@ export class MessagesService {
       } else {
         const row = await qb.select('COUNT(log.id)', 'count').getRawOne();
         totalCount = Number(row.count);
-        await this.redisService.setUserQueryCache(userId, currentQueryStr, totalCount);
+        await this.redisService.setUserLogQueryCache(userId, currentQueryStr, totalCount);
       }
 
       return { messageLogs, totalCount };

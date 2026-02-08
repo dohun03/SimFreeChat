@@ -3,7 +3,7 @@
 > NestJS와 Socket.io 기반의 실시간 텍스트, 이미지 공유 채팅 서비스입니다.  
 > 웹소켓 기반의 저지연 텍스트 및 이미지(원본/썸네일) 송수신을 지원합니다.  
 > Gemini AI를 연동하여 누적된 대화의 핵심 내용을 요약해 주는 기능을 제공합니다.  
-> Redis 캐싱을 통해 세션과 유저 상태를 실시간 동기화하고 DB 부하를 최적화했습니다.  
+> Redis 캐싱을 통해 세션과 유저 상태 등을 실시간 동기화하고 DB 부하를 최소화했습니다.  
 >
 > **진행 기간: 25.09.02 ~ 현재**
 
@@ -12,6 +12,7 @@
 ## 목차
 
 1. [데모 사이트](#데모-사이트)
+2. [영상](#영상)
 2. [프로그램 주요 기능](#프로그램-주요-기능)
 3. [서비스 아키텍처](#서비스-아키텍처)
 4. [사용한 기술 스택](#사용한-기술-스택)
@@ -30,29 +31,47 @@
 
 ---
 
+## 영상
+
+### **메시지 전송 & 삭제**
+![Image](https://github.com/user-attachments/assets/1362f5cb-a4e8-446c-874a-34317995f21a)
+
+### **메시지 AI 요약**
+![Image](https://github.com/user-attachments/assets/239551ac-a421-41ed-8eb0-151e4b2bcc52)
+
+---
+
+### **AWS EC2 모니터링 (트래픽 테스트)**
+![Image](https://github.com/user-attachments/assets/d63dfeec-e941-4a86-819b-0c689cf08f1a)
+
+### **AWS RDS 모니터링 (트래픽 테스트)**
+![Image](https://github.com/user-attachments/assets/f512a8fb-e870-43bb-a79f-e6f06ab8afb1)
+
+---
+
 ## 프로그램 주요 기능
 
-### 1. 사용자
+### 사용자
 * **인증 및 세션 관리:** **Redis** 기반 세션 시스템으로 로그인/로그아웃 상태 실시간 관리
 * **계정 제어:** 회원가입, 로그인, 로그아웃 및 회원 정보 수정 기능
 * **보안 및 동기화:** 동일 계정 중복 접속 차단 및 로그아웃 시 참여 중인 모든 방 자동 퇴장
 
-### 2. 관리자 권한
+### 관리자 권한
 * **사용자 관리:** 전체 사용자 목록 조회 및 일반 사용자 정보 수정/삭제
 * **이용 제한:** 위반 사용자 대상 기간별/영구 접속 차단(Ban) 기능
 * **로그 모니터링:** 모든 메시지 생성 및 삭제 로그 조회 및 추적
 
-### 3. 채팅방
+### 채팅방
 * **리소스 관리:** 채팅방 CRUD 및 방별 속성(제목, 비밀번호, 인원 제한) 설정
 * **성능 최적화:** **Redis** 기반 실시간 인원수 캐싱을 통한 DB 부하 분산
 * **AI 대화 요약:** **Gemini API** 연동을 통한 채팅방 내 누적 메시지 핵심 내용 요약 기능
 
-### 4. 채팅방 권한
+### 채팅방 권한
 * **방장(Owner):** 게스트 강제 퇴장 및 해당 방 진입 차단(Ban) 관리
 * **게스트(Guest):** 실시간 메시지 송수신 및 본인 작성 메시지 삭제 권한
 * **진입 제어:** 차단 리스트 확인 및 최대 인원수 초과 시 입장 제한 유효성 검사
 
-### 5. 메시지
+### 메시지
 * **실시간 통신:** **Socket.io** 기반 양방향 실시간 메시지 처리
 * **멀티미디어 지원:** 이미지 파일 업로드(원본/썸네일 분리 저장) 및 전송 기능
 * **로그 관리:** 메시지 생성/삭제 시 DB 기록 및 삭제 로그 자동 생성
@@ -61,7 +80,7 @@
 
 ## 서비스 아키텍처
 
-<img width="100%" alt="Service Architecture" src="https://github.com/user-attachments/assets/0585df05-5f96-43eb-afde-389a25e9f78e" />
+<img width="100%" alt="Service Architecture" src="https://github.com/user-attachments/assets/24ee7e65-fcca-464b-8d7b-e4d16a3a0059" />
 
 ---
 
@@ -136,21 +155,21 @@
 
 ## 성능 개선 및 문제 해결
 
-- [**이슈 #1: 대용량 메시지 로그 조회 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/1)
-- [**이슈 #2: 대규모 트래픽 대응을 위한 메시지 조회 및 전송 아키텍처 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/2)
+- [**이슈 #1: 대용량 메시지 로그 DB 조회 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/1)
+- [**이슈 #2: 트래픽 부하 테스트를 통해 쓰기 성능 200배 개선, 조회 부하 90% 절감**](https://github.com/dohun03/SimFreeChat/issues/2)
 - [**이슈 #3: 이미지 이중 저장 구조(Thumbnail/Origin) 도입을 통한 네트워크 트래픽 최적화**](https://github.com/dohun03/SimFreeChat/issues/3)
 
 ---
 
 ## 실행 방법
 
+본 프로젝트는 Docker 환경에서 가장 쉽고 빠르게 실행할 수 있습니다.
+
 ### 1. 저장소 클론
-git clone https://github.com/dohun03/SimFreeChat.git
+git clone https://github.com/dohun03/SimFreeChat.git  
+cd [프로젝트명]
 
-### 2. 의존성 설치
-npm install
-
-### 3. 환경 변수 설정 (.env 파일 생성)
+### 2. 환경 변수 설정 (.env 파일 생성)
 
 ```bash
 # 서버 포트
@@ -168,14 +187,20 @@ REDIS_HOST=
 REDIS_PORT=
 
 # 서버 IP (예: http://localhost:3000 또는 실제 도메인)
-SOCKET_ORIGIN=
+SERVER_URL=
 
 # 구글 AI 스튜디오에서 발급받은 키
 GEMINI_API_KEY=
+
+# Bcrypt 단계
+BCRYPT_SALT_ROUNDS=
+
+MY_UID=1000
+MY_GID=1000
 ```
 
-### 4. 서버 실행
-npm run start:dev
+### 3. 컨테이너 실행
+docker-compose up -d --build
 
 ---
 

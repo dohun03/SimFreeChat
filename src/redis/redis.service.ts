@@ -38,29 +38,29 @@ export class RedisService implements OnModuleInit {
   }
 
   // 1. 세션 관리
-  async createSession(sessionId: string, data: any, ttlSeconds = 3600 * 24) {
+  async setUserSession(sessionId: string, data: any, ttlSeconds = 3600 * 24) {
     await this.redis.set(`session:${sessionId}`, JSON.stringify(data), 'EX', ttlSeconds);
   }
 
-  async getSession(sessionId: string) {
+  async getUserSession(sessionId: string) {
     const session = await this.redis.get(`session:${sessionId}`);
     return session ? JSON.parse(session) : null;
   }
 
-  async deleteSession(sessionId: string) {
+  async delUserSession(sessionId: string) {
     await this.redis.del(`session:${sessionId}`);
   }
 
   // 2. 방별 유저 관리
-  async addUserToRoom(roomId: number, userId: number) {
+  async addRoomUser(roomId: number, userId: number) {
     await this.redis.sadd(`room:users:${roomId}`, userId);
   }
 
-  async removeUserFromRoom(roomId: number, userId: number) {
+  async delRoomUser(roomId: number, userId: number) {
     await this.redis.srem(`room:users:${roomId}`, userId);
   }
 
-  async deleteRoom(roomId: number) {
+  async delRoomUserAll(roomId: number) {
     await this.redis.del(`room:users:${roomId}`);
   }
 
@@ -125,7 +125,7 @@ export class RedisService implements OnModuleInit {
   }
 
   // 2.5. 유저+방 관련 데이터 삭제
-  async clearUserRoomRelations(roomId: number, userId: number): Promise<void> {
+  async delUserRoomRelation(roomId: number, userId: number): Promise<void> {
     const multi = this.redis.multi();
     
     multi.srem(`room:users:${roomId}`, userId);
@@ -139,12 +139,12 @@ export class RedisService implements OnModuleInit {
   }
 
   // 3. 유저별 방 관리
-  async addRoomToUser(userId: number, roomId: number) {
+  async addUserRoom(userId: number, roomId: number) {
     await this.redis.sadd(`user:rooms:${userId}`, roomId);
     await this.redis.expire(`user:rooms:${userId}`, 3600 * 24);
   }
 
-  async removeRoomFromUser(userId: number, roomId: number) {
+  async delUserRoom(userId: number, roomId: number) {
     await this.redis.srem(`user:rooms:${userId}`, roomId);
   }
 
@@ -154,32 +154,32 @@ export class RedisService implements OnModuleInit {
 
   // 4. 유저별 소켓 세션 관리 (Hash 구조 사용)
   // user:sockets:userId { field: socketId, value: roomId }
-  async hSetUserSocket(userId: number, socketId: string, roomId: number) {
+  async setUserSocket(userId: number, socketId: string, roomId: number) {
     const key = `user:sockets:${userId}`;
     await this.redis.hset(key, socketId, roomId);
     await this.redis.expire(key, 3600 * 24);
   }
 
-  async hGetAllUserSockets(userId: number) {
-    const key = `user:sockets:${userId}`;
-    return this.redis.hgetall(key);
+  async delUserSocket(userId: number, socketId: string) {
+    await this.redis.hdel(`user:sockets:${userId}`, socketId);
   }
 
-  async hDelUserSocket(userId: number, socketId: string) {
-    await this.redis.hdel(`user:sockets:${userId}`, socketId);
+  async getUserSockets(userId: number) {
+    const key = `user:sockets:${userId}`;
+    return this.redis.hgetall(key);
   }
 
   // 5. 메시지 관리
 
   // [방별 캐시 메시지 조회]
-  async getCacheMessagesByRoom(roomId: number): Promise<any[]> {
+  async getRoomMessageCache(roomId: number): Promise<any[]> {
     const key = `room:messages:${roomId}`;
     const messages = await this.redis.lrange(key, 0, -1);
     return messages.map((msg) => JSON.parse(msg));
   }
 
   // [방별 캐시 메시지의 마지막 ID 조회]
-  async getLastMessageId(roomId: number): Promise<string | undefined> {
+  async getRoomLastMessageId(roomId: number): Promise<string | undefined> {
     const key = `room:messages:${roomId}`;
     const latest = await this.redis.lindex(key, -1);
     if (!latest) return undefined;
@@ -190,13 +190,8 @@ export class RedisService implements OnModuleInit {
     }
   }
 
-  // [방별 캐시 메시지 삭제]
-  async deleteAllCacheMessagesByRoom(roomId: number) {
-    await this.redis.del(`room:messages:${roomId}`);
-  }
-
-  // [방별 캐시 메시지 삭제]
-  async deleteCacheMessageByRoom(roomId: number, messageId: string) {
+  // [방별 특정 캐시 메시지 삭제]
+  async delRoomMessageCache(roomId: number, messageId: string) {
     const key = `room:messages:${roomId}`;
   
     const items = await this.redis.lrange(key, 0, -1);
@@ -217,6 +212,11 @@ export class RedisService implements OnModuleInit {
     await this.redis.lset(key, index, JSON.stringify(msgObj));
 
     return true;
+  }
+  
+  // [방별 전체 캐시 메시지 삭제]
+  async delRoomMessageCacheAll(roomId: number) {
+    await this.redis.del(`room:messages:${roomId}`);
   }
 
   // [버퍼 메시지&로그 저장]
@@ -246,7 +246,7 @@ export class RedisService implements OnModuleInit {
   }
 
   // [버퍼 메시지&로그 삭제]
-  async deleteMessageAndLog(roomId: number, userId: number, messageId: string): Promise<boolean> {
+  async delMessageAndLog(roomId: number, userId: number, messageId: string): Promise<boolean> {
     const bufferKey = 'buffer:messages';
     const logKey = 'buffer:logs';
 
@@ -307,7 +307,7 @@ export class RedisService implements OnModuleInit {
     try {
       await this.processBuffer('buffer:messages', this.messageRepository);
       await this.processBuffer('buffer:logs', this.messageLogRepository);
-      await this.clearUserQueryCache();
+      await this.delUserLogQueryCacheAll();
     } catch (err) {
       this.logger.error(`[BATCH_CRITICAL_ERROR] 배치 전체 흐름 중단 | 사유:${err.message}`, err.stack);
     } finally {
@@ -367,20 +367,21 @@ export class RedisService implements OnModuleInit {
   // 6. 메시지 로그 조회 캐시
 
   // [쿼리 캐시 저장]
-  async setUserQueryCache(userId: number, queryStr: string, totalCount: number) {
+  async setUserLogQueryCache(userId: number, queryStr: string, totalCount: number) {
     const key = `user:logs:count:${userId}`;
     const data = JSON.stringify({ queryStr, totalCount });
     await this.redis.set(key, data, 'EX', 3600);
   }
 
   // [쿼리 캐시 조회]
-  async getUserQueryCache(userId: number): Promise<{ queryStr: string; totalCount: number } | null> {
+  async getUserLogQueryCache(userId: number): Promise<{ queryStr: string; totalCount: number } | null> {
     const key = `user:logs:count:${userId}`;
     const data = await this.redis.get(key);
     return data ? JSON.parse(data) : null;
   }
+
   // [쿼리 캐시 일괄 삭제]
-  private async clearUserQueryCache() {
+  private async delUserLogQueryCacheAll() {
     const keys = await this.redis.keys('user:logs:count:*');
     if (keys.length > 0) {
       await this.redis.del(...keys);

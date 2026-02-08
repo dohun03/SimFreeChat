@@ -36,6 +36,12 @@ export async function renderChatRoom(container, user, roomId) {
   socket = io({
     transports: ['websocket'],
     withCredentials: true,
+    
+    reconnection: true,             // 연결 끊겼을 때 자동 재접속
+    reconnectionAttempts: 10,       // 최대 재접속 시도 횟수
+    reconnectionDelay: 1000,        // 재접속 시도 사이의 대기 시간 (1초)
+    reconnectionDelayMax: 5000,     // 재접속 대기 시간 최대치 (5초)
+    timeout: 20000,                 // 연결 시도 타임아웃 (20초)
   });
 
   try {

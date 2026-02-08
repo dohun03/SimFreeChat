@@ -12,6 +12,7 @@ import { SocketEvents } from 'src/socket/socket.events';
 import path from 'path';
 import * as fs from 'fs';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { BCRYPT_SALT_ROUNDS } from 'src/common/constans';
 
 @Injectable()
 export class RoomsService {
@@ -32,7 +33,7 @@ export class RoomsService {
     const owner = await this.userRepository.findOne({ where: { id: userId } });
     if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
 
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+    const hashedPassword = password ? await bcrypt.hash(password, BCRYPT_SALT_ROUNDS) : null;
 
     const room = this.roomRepository.create({
       name, owner, maxMembers, password: hashedPassword,
@@ -67,7 +68,7 @@ export class RoomsService {
     try {
       if (name !== undefined) room.name = name;
       if (maxMembers !== undefined) room.maxMembers = maxMembers;
-      if (password !== undefined) room.password = password === null ? null : await bcrypt.hash(password, 10);
+      if (password !== undefined) room.password = password === null ? null : await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
   
       const updatedRoom = await this.roomRepository.save(room);
   
@@ -102,12 +103,12 @@ export class RoomsService {
               const uid = Number(uidStr);
 
               this.socketEvents.deleteRoom(roomId, uid);
-              await this.redisService.clearUserRoomRelations(roomId, uid);
+              await this.redisService.delUserRoomRelation(roomId, uid);
             })
           );
         }
 
-        await this.redisService.deleteRoom(roomId);
+        await this.redisService.delRoomUserAll(roomId);
 
         this.logger.log(`[ROOM_SOFT_DELETE] 방ID:${roomId} | 유저ID:${ownerId} | 퇴장인원:${roomUsersArray.length}명`);
 
@@ -149,7 +150,7 @@ export class RoomsService {
             .catch(e => this.logger.warn(`[ROOM_FILE_DELETE_ERROR] 방ID:${room.id} | 사유:파일 제거 실패`));
         }
 
-        await this.redisService.deleteAllCacheMessagesByRoom(room.id);
+        await this.redisService.delRoomMessageCacheAll(room.id);
 
         this.logger.log(`[ROOM_DELETE_SUCCESS] 방ID:${room.id} | 영구 삭제 및 캐시 정리 완료`);
       }
