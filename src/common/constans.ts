@@ -1,0 +1,1 @@
+export const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '8', 10);

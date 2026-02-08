@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { RedisService } from 'src/redis/redis.service';
 import { SocketService } from 'src/socket/socket.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { BCRYPT_SALT_ROUNDS } from 'src/common/constans';
 
 @Injectable()
 export class UsersService {
@@ -26,7 +27,7 @@ export class UsersService {
     });
     if (existingUser) throw new BadRequestException('이미 존재하는 사용자명 또는 이메일입니다.');
   
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
   
     const newUser = this.userRepository.create({
       name,
@@ -134,7 +135,7 @@ export class UsersService {
       const isSame = await bcrypt.compare(updateUserDto.password, user.password);
       if (isSame) throw new BadRequestException('이전과 동일한 비밀번호입니다.');
 
-      user.password = await bcrypt.hash(updateUserDto.password, 10);
+      user.password = await bcrypt.hash(updateUserDto.password, BCRYPT_SALT_ROUNDS);
     }
 
     // 이메일 변경
@@ -189,7 +190,7 @@ export class UsersService {
       const isSame = await bcrypt.compare(updateUserDto.password, user.password);
       if (isSame) throw new BadRequestException('이전과 동일한 비밀번호입니다.');
 
-      user.password = await bcrypt.hash(updateUserDto.password, 10);
+      user.password = await bcrypt.hash(updateUserDto.password, BCRYPT_SALT_ROUNDS);
     }
 
     // 이메일 변경
