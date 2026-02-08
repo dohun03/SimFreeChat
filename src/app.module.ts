@@ -36,7 +36,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         maxQueryExecutionTime: 500,
         logger: 'advanced-console',
         extra: {
-          connectionLimit: 10,
+          connectionLimit: 25,
           waitForConnections: true,
           queueLimit: 0,
           connectTimeout: 10000,
