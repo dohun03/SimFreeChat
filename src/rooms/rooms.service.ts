@@ -30,13 +30,13 @@ export class RoomsService {
   async createRoom(userId: number, createRoomDto: CreateRoomDto) {
     const { name, maxMembers, password } = createRoomDto;
 
-    const owner = await this.userRepository.findOne({ where: { id: userId } });
-    if (!owner) throw new NotFoundException('유저를 찾을 수 없습니다.');
-
     const hashedPassword = password ? await bcrypt.hash(password, BCRYPT_SALT_ROUNDS) : null;
 
     const room = this.roomRepository.create({
-      name, owner, maxMembers, password: hashedPassword,
+      name,
+      maxMembers,
+      password: hashedPassword,
+      owner: { id: userId }
     });
 
     try {

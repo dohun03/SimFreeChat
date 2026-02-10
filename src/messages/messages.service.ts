@@ -203,7 +203,8 @@ export class MessagesService {
 
   async getAiMessagesSummary(roomId: number) {
     const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
-    if (!cachedMessages?.length) return { summary: "내용 없음" };
+    if (!cachedMessages) return { summary: "내용 없음" };
+    if (cachedMessages.length < 20) return { summary: "대화가 부족하여 요약할 수 없습니다." };
 
     // 데이터 포맷팅
     const chatContext = cachedMessages
@@ -248,13 +249,9 @@ export class MessagesService {
     }
   }
 
-  async getAllMessageLogs(userId: number, query: any): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
-    const admin = await this.userRepository.findOne({ 
-      where: { id: userId }, 
-      select: ['id', 'isAdmin'] 
-    });
-    if (!admin?.isAdmin) {
-      this.logger.warn(`[ADMIN_ACCESS_DENIED] 유저ID:${userId} | 사유:권한없음`);
+  async getAllMessageLogs(user: any, query: any): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
+    if (!user?.isAdmin) {
+      this.logger.warn(`[ADMIN_ACCESS_DENIED] 유저ID:${user.id} | 사유:권한없음`);
       throw new ForbiddenException('권한이 없습니다.');
     }
 
@@ -303,7 +300,7 @@ export class MessagesService {
         actionType, roomIdType, roomOwnerIdType, userIdType,
       });
 
-      const cachedData = await this.redisService.getUserLogQueryCache(userId);
+      const cachedData = await this.redisService.getUserLogQueryCache(user.id);
       let totalCount: number;
 
       // 캐시 적중 시 COUNT 쿼리 생략
@@ -312,13 +309,13 @@ export class MessagesService {
       } else {
         const row = await qb.select('COUNT(log.id)', 'count').getRawOne();
         totalCount = Number(row.count);
-        await this.redisService.setUserLogQueryCache(userId, currentQueryStr, totalCount);
+        await this.redisService.setUserLogQueryCache(user.id, currentQueryStr, totalCount);
       }
 
       return { messageLogs, totalCount };
 
     } catch (err) {
-      this.logger.error(`[GET_LOGS_ERROR] 유저ID:${userId} | 사유:${err.message}`, err.stack);
+      this.logger.error(`[GET_LOGS_ERROR] 유저ID:${user.id} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('로그 조회 중 문제가 발생했습니다.');
     }
   }

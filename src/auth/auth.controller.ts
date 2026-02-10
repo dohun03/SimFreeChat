@@ -15,14 +15,8 @@ export class AuthController {
   @Post('login')
   async logIn(
     @Body() loginUserDto: LoginUserDto,
-    @Req() req: any,
     @Res({ passthrough: true}) res: Response
   ) {
-    const existingSessionId = req.cookies['SESSIONID'];
-    if(existingSessionId) {
-      throw new BadRequestException('이미 로그인 되어있는 사용자입니다.');
-    }
-
     const { sessionId, safeUser } = await this.authService.logIn(loginUserDto);
 
     res.cookie('SESSIONID', sessionId, {
@@ -40,14 +34,13 @@ export class AuthController {
     @Req() req: any,
     @Res({ passthrough: true }) res: Response
   ) {
-    await this.socketService.leaveAllRooms(req.user.userId);
-    await this.authService.logOut(req.user.sessionId);
+    await this.authService.logOut(req.user.id);
 
     res.clearCookie('SESSIONID', {
       httpOnly: true,
       sameSite: 'lax',
     });
     
-    return { message: '로그아웃' };
+    return { message: '로그아웃 완료' };
   }
 }

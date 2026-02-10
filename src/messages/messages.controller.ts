@@ -14,7 +14,7 @@ export class MessagesController {
     @Req() req: any,
     @Query() query: any
   ) {
-    return this.messagesService.getAllMessageLogs(req.user.userId, query);
+    return this.messagesService.getAllMessageLogs(req.user, query);
   }
 
   @UseGuards(SessionGuard)
@@ -31,6 +31,7 @@ export class MessagesController {
     return this.messagesService.getAiMessagesSummary(roomId);
   }
 
+  @UseGuards(SessionGuard)
   @Get('/:roomId')
   async getMessagesByRoom(
     @Param('roomId') roomId: number,

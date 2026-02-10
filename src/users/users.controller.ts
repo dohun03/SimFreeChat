@@ -20,7 +20,8 @@ export class UsersController {
   @UseGuards(SessionGuard)
   @Get('me')
   async getMe(@Req() req: any) {
-    return this.usersService.getMyProfile(req.user.userId);
+    const { sessionId, ...safeUser } = req.user;
+    return safeUser;
   }
 
   @UseGuards(SessionGuard)
@@ -29,26 +30,26 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto, 
     @Req() req: any
   ) {
-    return this.usersService.updateMyProfile(req.user.userId, updateUserDto);
+    return this.usersService.updateMyProfile(req.user.id, updateUserDto);
   }
 
   @UseGuards(SessionGuard)
-  @Post('/:userId/ban')
+  @Post('/:targetUserId/ban')
   async banUserById(
-    @Param('userId', ParseIntPipe) userId: number,
+    @Param('targetUserId', ParseIntPipe) targetUserId: number,
     @Body() banUserDto: BanUserDto,
     @Req() req: any
   ) {
-    return await this.usersService.banUserById(req.user.userId, userId, banUserDto);
+    return await this.usersService.banUserById(req.user, targetUserId, banUserDto);
   }
 
   @UseGuards(SessionGuard)
-  @Delete('/:userId/ban')
+  @Delete('/:targetUserId/ban')
   async unbanUserById(
-    @Param('userId', ParseIntPipe) userId: number,
+    @Param('targetUserId', ParseIntPipe) targetUserId: number,
     @Req() req: any
   ) {
-    return this.usersService.unbanUserById(req.user.userId, userId);
+    return this.usersService.unbanUserById(req.user, targetUserId);
   }
 
   @UseGuards(SessionGuard)
@@ -61,22 +62,22 @@ export class UsersController {
   }
 
   @UseGuards(SessionGuard)
-  @Patch('/:userId')
+  @Patch('/:targetUserId')
   async updateById(
     @Body() updateUserDto: UpdateUserDto,
-    @Param('userId', ParseIntPipe) userId: number,
+    @Param('targetUserId', ParseIntPipe) targetUserId: number,
     @Req() req: any
   ) {
-    return this.usersService.updateUserById(req.user.userId, userId, updateUserDto);
+    return this.usersService.updateUserById(req.user, targetUserId, updateUserDto);
   }
 
   @UseGuards(SessionGuard)
-  @Delete('/:userId')
+  @Delete('/:targetUserId')
   async deleteById(
-    @Param('userId', ParseIntPipe) userId: number,
+    @Param('targetUserId', ParseIntPipe) targetUserId: number,
     @Req() req: any
   ) {
-    await this.usersService.deleteUserById(req.user.userId, userId);
+    await this.usersService.deleteUserById(req.user, targetUserId);
     return { message: '삭제 되었습니다.' };
   }
 
@@ -86,6 +87,6 @@ export class UsersController {
     @Req() req: any,
     @Query() query: any
   ) {
-    return this.usersService.getAllUsers(req.user.userId, query);
+    return this.usersService.getAllUsers(req.user, query);
   }
 }

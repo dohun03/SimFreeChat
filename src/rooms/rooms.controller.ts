@@ -19,7 +19,7 @@ export class RoomsController {
     @Body() createRoomDto: CreateRoomDto,
     @Req() req: any
   ) {
-    return this.roomsService.createRoom(req.user.userId, createRoomDto);
+    return this.roomsService.createRoom(req.user.id, createRoomDto);
   }
 
   // 방 수정
@@ -30,7 +30,7 @@ export class RoomsController {
     @Body() updateRoomDto: UpdateRoomDto,
     @Req() req: any
   ) {
-    const room = await this.roomsService.updateRoom(roomId, req.user.userId, updateRoomDto);
+    const room = await this.roomsService.updateRoom(roomId, req.user.id, updateRoomDto);
     this.socketService.updateRoom(roomId, room);
 
     return room;
@@ -43,7 +43,7 @@ export class RoomsController {
     @Param('roomId', ParseIntPipe) roomId: number,
     @Req() req: any
   ) {
-    await this.roomsService.softDeleteRoom(roomId, req.user.userId);
+    await this.roomsService.softDeleteRoom(roomId, req.user.ic);
 
     return { message: '삭제 되었습니다.' };
   }

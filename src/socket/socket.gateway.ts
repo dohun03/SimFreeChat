@@ -51,7 +51,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleConnection(client: Socket) {
     try {
       const user = await this.getUserFromSession(client);
-      client.data.userId = user.userId;
+      client.data.userId = user.id;
       client.data.userName = user.name;
     } catch (err) {
       this.logger.warn(`[CONNECTION_ERROR] 소켓ID: ${client.id} | 사유: ${err.message}`);
@@ -100,10 +100,12 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
   
     if (!sessionId) throw new Error('세션이 존재하지 않습니다.');
   
-    const user = await this.redisService.getUserSession(sessionId);
-    if (!user) throw new Error('세션 정보가 없습니다.');
+    const userId = await this.redisService.getUserIdBySession(sessionId);
+    if (!userId) throw new Error('세션 정보가 없습니다.');
+
+    const userData = await this.redisService.getUserProfile(userId);
   
-    return user;
+    return userData;
   }
 
   // DTO 수동 유효성 검사 메서드
@@ -283,7 +285,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const dto = await this.validateDto(BanUserDto, payload);
       const owner = await this.getUserFromSession(client);
 
-      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner.userId, dto.banReason);
+      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner.id, dto.banReason);
       await this.removeUserSocket(dto.roomId, dto.userId);
 
       const [roomUsers, roomUserCount] = await Promise.all([

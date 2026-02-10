@@ -1,11 +1,12 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 import { Message } from 'src/messages/messages.entity';
 import { MessageLog } from 'src/messages/message-logs.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { User } from 'src/users/users.entity';
 
 @Injectable()
 export class RedisService implements OnModuleInit {
@@ -14,6 +15,8 @@ export class RedisService implements OnModuleInit {
 
   constructor(
     @InjectRedis() private readonly redis: Redis,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(MessageLog)
@@ -23,10 +26,10 @@ export class RedisService implements OnModuleInit {
   // 서버 구동 시 부분 초기화
   async onModuleInit() {
     try {
-      const roomKeys = await this.redis.keys('room:users:*');
-      const socketKeys = await this.redis.keys('user:sockets:*');
-      const userRoomKeys = await this.redis.keys('user:rooms:*');
-      const keysToDelete = [...roomKeys, ...socketKeys, ...userRoomKeys];
+      const roomUsers = await this.redis.keys('room:users:*');
+      const userSockets = await this.redis.keys('user:sockets:*');
+      const userRooms = await this.redis.keys('user:rooms:*');
+      const keysToDelete = [...roomUsers, ...userSockets, ...userRooms];
 
       if (keysToDelete.length > 0) {
         await this.redis.del(...keysToDelete);
@@ -38,20 +41,72 @@ export class RedisService implements OnModuleInit {
   }
 
   // 1. 세션 관리
-  async setUserSession(sessionId: string, data: any, ttlSeconds = 3600 * 24) {
-    await this.redis.set(`session:${sessionId}`, JSON.stringify(data), 'EX', ttlSeconds);
+
+  // 로그인: (세션, 세션매핑키, 유저캐시) 생성
+  async setLoginUserData(sessionId: string, userId: number, profileData: any) {
+    const oldSessionId = await this.redis.get(`user:session:mapping:${userId}`);
+
+    const multi = this.redis.multi();
+
+    if (oldSessionId) {
+      multi.del(`session:${oldSessionId}`);
+      this.logger.log(`USER_SESSION_REPLACED [SUCCESS] 유저ID:${userId} | 기존세션:${oldSessionId} 파괴`);
+    }
+
+    multi.set(`session:${sessionId}`, userId, 'EX', 3600 * 24);
+    multi.set(`user:session:mapping:${userId}`, sessionId, 'EX', 3600 * 24);
+    multi.set(`user:profile:${userId}`, JSON.stringify(profileData), 'EX', 3600 * 24 * 7);
+
+    await multi.exec();
   }
 
-  async getUserSession(sessionId: string) {
-    const session = await this.redis.get(`session:${sessionId}`);
-    return session ? JSON.parse(session) : null;
+  // 세션 조회
+  async getUserIdBySession(sessionId: string): Promise<number | null> {
+    const userId = await this.redis.get(`session:${sessionId}`);
+    return userId ? Number(userId) : null;
   }
 
-  async delUserSession(sessionId: string) {
-    await this.redis.del(`session:${sessionId}`);
+  // 로그아웃: (세션, 세션매핑키) 삭제
+  async delSessionByUserId(userId: number) {
+    const sessionId = await this.redis.get(`user:session:mapping:${userId}`);
+    
+    // 매핑이 없다는 건 이미 세션이 죽었다는 뜻
+    if (!sessionId) {
+      await this.redis.del(`user:session:mapping:${userId}`);
+      return;
+    }
+
+    const multi = this.redis.multi();
+
+    multi.del(`session:${sessionId}`);
+    multi.del(`user:session:mapping:${userId}`);
+
+    await multi.exec();
+    this.logger.log(`USER_FORCE_LOGOUT [SUCCESS] 유저ID:${userId} 기반 삭제 완료`);
   }
 
-  // 2. 방별 유저 관리
+  // 2. 유저 관리
+  async setUserProfile(userId: number, data: any) {
+    await this.redis.set(`user:profile:${userId}`, JSON.stringify(data), 'EX', 3600 * 24 * 7);
+  }
+
+  async getUserProfile(userId: number) {
+    const key = `user:profile:${userId}`;
+    const cacheUser = await this.redis.get(key);
+
+    if (cacheUser) return JSON.parse(cacheUser);
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다.');
+
+    const { password, ...safeUser } = user;
+    
+    await this.redis.set(key, JSON.stringify(safeUser), 'EX', 3600 * 24 * 7);
+
+    return safeUser;
+  }
+
+  // 3. 방별 유저 관리
   async addRoomUser(roomId: number, userId: number) {
     await this.redis.sadd(`room:users:${roomId}`, userId);
   }
@@ -124,7 +179,7 @@ export class RedisService implements OnModuleInit {
     return this.redis.sismember(`room:users:${roomId}`, userId);
   }
 
-  // 2.5. 유저+방 관련 데이터 삭제
+  // 3.5. 유저+방 관련 데이터 삭제
   async delUserRoomRelation(roomId: number, userId: number): Promise<void> {
     const multi = this.redis.multi();
     
@@ -138,7 +193,7 @@ export class RedisService implements OnModuleInit {
     }
   }
 
-  // 3. 유저별 방 관리
+  // 4. 유저별 방 관리
   async addUserRoom(userId: number, roomId: number) {
     await this.redis.sadd(`user:rooms:${userId}`, roomId);
     await this.redis.expire(`user:rooms:${userId}`, 3600 * 24);
@@ -152,7 +207,7 @@ export class RedisService implements OnModuleInit {
     return this.redis.smembers(`user:rooms:${userId}`);
   }
 
-  // 4. 유저별 소켓 세션 관리 (Hash 구조 사용)
+  // 5. 유저별 소켓 세션 관리 (Hash 구조 사용)
   // user:sockets:userId { field: socketId, value: roomId }
   async setUserSocket(userId: number, socketId: string, roomId: number) {
     const key = `user:sockets:${userId}`;
@@ -169,7 +224,7 @@ export class RedisService implements OnModuleInit {
     return this.redis.hgetall(key);
   }
 
-  // 5. 메시지 관리
+  // 6. 메시지 관리
 
   // [방별 캐시 메시지 조회]
   async getRoomMessageCache(roomId: number): Promise<any[]> {
@@ -364,7 +419,7 @@ export class RedisService implements OnModuleInit {
     }
   }
 
-  // 6. 메시지 로그 조회 캐시
+  // 7. 메시지 로그 조회 캐시
 
   // [쿼리 캐시 저장]
   async setUserLogQueryCache(userId: number, queryStr: string, totalCount: number) {

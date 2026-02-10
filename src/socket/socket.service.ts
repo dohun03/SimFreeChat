@@ -28,12 +28,16 @@ export class SocketService {
     const roomUsersArray = await this.redisService.getRoomUsers(roomId);
     if (roomUsersArray.length === 0) return [];
 
-    return await this.userRepository.find({
-      where: { id: In(roomUsersArray.map(id => Number(id))) },
-      select: ['id', 'name']
-    });
+    const users = await Promise.all(
+      roomUsersArray.map(userId => 
+        this.redisService.getUserProfile(Number(userId))
+      )
+    );
+
+    return users.filter(user => !!user);
   }
 
+  // room 정보도 추후에 Redis로 저장
   async joinRoom(roomId: number, userId: number, password?: string): Promise<JoinRoomResult> {
     const room = await this.roomRepository.findOne({
       where: { id: roomId },
@@ -49,9 +53,7 @@ export class SocketService {
       if (!isPasswordValid) throw new BadRequestException('비밀번호가 일치하지 않습니다.');
     }
     
-    const joinUser = await this.userRepository.findOne({
-      where: { id: userId }
-    });
+    const joinUser = await this.redisService.getUserProfile(userId);
     if (!joinUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
     if (joinUser.bannedUntil && joinUser.bannedUntil > new Date()) throw new UnauthorizedException(`이용이 정지된 계정입니다. 사유:  ${joinUser.banReason}`);
 
@@ -76,9 +78,7 @@ export class SocketService {
     const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
 
-    const leaveUser = await this.userRepository.findOne({
-      where: { id: userId }
-    });
+    const leaveUser = await this.redisService.getUserProfile(userId);
     if (!leaveUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
 
     await this.redisService.delUserRoomRelation(roomId, userId);
@@ -90,16 +90,25 @@ export class SocketService {
   }
 
   async leaveAllRooms(userId: number): Promise<void> {
-    const leaveUser = await this.userRepository.findOne({
-      where: { id: userId }
-    });
-    if (!leaveUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
+    let leaveUser = await this.redisService.getUserProfile(userId);
+    if (!leaveUser) {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        if (user) {
+            const { password, ...safeUser } = user;
+            leaveUser = safeUser;
+        }
+    }
+    
+    // 만약 진짜 없는 유저면 중단
+    if (!leaveUser) {
+      this.logger.warn(`[LEAVE_ALL_ROOMS_SKIP] 유저ID:${userId} - 정리할 유저 정보가 존재하지 않음`);
+      return;
+    }
 
     const userRoomIds = await this.redisService.getUserRooms(userId);
-    if (userRoomIds.length === 0) return;
 
-    await Promise.all(
-      userRoomIds.map(async (roomIdStr) => {
+    if (userRoomIds && userRoomIds.length > 0) {
+      for (const roomIdStr of userRoomIds) {
         const roomId = Number(roomIdStr);
         await this.redisService.delUserRoomRelation(roomId, userId);
 
@@ -109,46 +118,41 @@ export class SocketService {
         ]);
 
         this.socketEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, leaveUser);
-        
-        this.logger.log(`ROOM_LEAVE_ALL [SUCCESS] 방ID:${roomId} | 유저ID:${userId}`);
-      })
-    );
+      }
+    }
+
+    await this.redisService.delSessionByUserId(userId);
+
+    this.logger.log(`ROOM_LEAVE_ALL [SUCCESS] 유저ID:${userId}`);
   }
 
   async updateRoom(roomId: number, room: any): Promise<void> {
     this.socketEvents.updateRoom(roomId, room);
   }
 
-  async kickUser(roomId: number, userId: number, owner: any): Promise<KickUserResult> {
-    const isUserInRoom = await this.redisService.isUserInRoom(roomId, userId);
+  async kickUser(roomId: number, targetUserId: number, owner: any): Promise<KickUserResult> {
+    const isUserInRoom = await this.redisService.isUserInRoom(roomId, targetUserId);
     if (!isUserInRoom) throw new BadRequestException('방에 존재하지 않습니다.');
 
     const room = await this.roomRepository.findOne({
       where: {
         id: roomId,
-        owner: owner.userId
+        owner: owner.id
       },
       relations: ['owner'],
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
-    if (room.owner.id!==owner.userId) throw new UnauthorizedException('권한이 없습니다.');
-    if (room.owner.id === userId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
+    if (room.owner.id!==owner.id) throw new UnauthorizedException('권한이 없습니다.');
+    if (room.owner.id === targetUserId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
 
-    await this.redisService.delUserRoomRelation(roomId, userId);
+    await this.redisService.delUserRoomRelation(roomId, targetUserId);
 
-    const kickedUser = await this.userRepository.findOne({
-      where: { id: userId },
-      select: ['id', 'name']
-    });
+    const kickedUser = await this.redisService.getUserProfile(targetUserId);
     if (!kickedUser) throw new BadRequestException('해당 유저가 없습니다.');
     
     const roomUsers = await this.getRoomUsersSummary(roomId);
     const roomUserCount = await this.redisService.getRoomUserCount(roomId);
 
     return { roomUsers, roomUserCount, kickedUser };
-  }
-
-  async listRoomUsers(roomId: number): Promise<string[]> {
-    return await this.redisService.getRoomUsers(roomId);
   }
 }

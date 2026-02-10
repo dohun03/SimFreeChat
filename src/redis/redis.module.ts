@@ -5,11 +5,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from 'src/messages/messages.entity';
 import { MessageLog } from 'src/messages/message-logs.entity';
+import { User } from 'src/users/users.entity';
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, MessageLog]),
+    TypeOrmModule.forFeature([User ,Message, MessageLog]),
     ConfigModule,
     RedisModule.forRootAsync({
       imports: [ConfigModule],

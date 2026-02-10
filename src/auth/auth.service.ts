@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { SocketService } from 'src/socket/socket.service';
 import { RedisService } from 'src/redis/redis.service';
 import { LoginUserDto } from './dto/login-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -15,6 +16,7 @@ export class AuthService {
     @InjectRepository(User) 
     private userRepository: Repository<User>,
     private readonly redisService: RedisService,
+    private readonly socketService: SocketService,
   ) {}
 
   async logIn(loginUserDto: LoginUserDto): Promise<{ sessionId: string, safeUser: any }> {
@@ -22,7 +24,6 @@ export class AuthService {
 
     const user = await this.userRepository.findOne({
       where: { name: name },
-      select: ['id', 'name', 'password', 'isAdmin', 'bannedUntil', 'banReason'],
     });
     
     if (!user) {
@@ -42,37 +43,37 @@ export class AuthService {
     }
 
     try {
-      const sessionId = uuid();
-      await this.redisService.setUserSession(sessionId, { 
-        userId: user.id,
-        userName: user.name,
-        isAdmin: user.isAdmin,
-      });
+      await this.socketService.leaveAllRooms(user.id);
 
-      return { 
-        sessionId, 
-        safeUser: {
-          id: user.id,
-          name: user.name,
-          isAdmin: user.isAdmin,
-          bannedUntil: user.bannedUntil,
-          banReason: user.banReason,
-        } 
+      const sessionId = uuid();
+      const safeUser = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        bannedUntil: user.bannedUntil,
+        banReason: user.banReason,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       };
+
+      await this.redisService.setLoginUserData(sessionId, user.id, safeUser);
+
+      return { sessionId, safeUser };
       
     } catch (err) {
-      this.logger.error(`[AUTH_SESSION_ERROR] 유저ID:${user.id} | 사유:${err.message}`, err.stack);
+      this.logger.error(`[AUTH_LOGIN_ERROR] 유저ID:${user.id} | 사유:${err.message}`, err.stack);
       throw new InternalServerErrorException('로그인 처리 중 서버 오류가 발생했습니다.');
     }
   }
 
-  async logOut(sessionId: string): Promise<void> {
+  async logOut(userId: number): Promise<void> {
     try {
-      if (sessionId) {
-        await this.redisService.delUserSession(sessionId);
+      if (userId) {
+        await this.socketService.leaveAllRooms(userId);
       }
     } catch (err) {
-      this.logger.error(`[AUTH_LOGOUT_ERROR] 세션ID:${sessionId} | 사유:${err.message}`);
+      this.logger.error(`[AUTH_LOGOUT_ERROR] 유저ID:${userId} | 사유:${err.message}`);
     }
   }
 }
