@@ -63,21 +63,16 @@ export class RoomUsersService {
     });
     if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
 
-    try {
-      const result = await this.roomUserRepository.delete({
-        room: { id: roomId },
-        user: { id: targetUserId },
-        isBanned: true,
-      });
-      if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
+    const result = await this.roomUserRepository.delete({
+      room: { id: roomId },
+      user: { id: targetUserId },
+      isBanned: true,
+    });
+    if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
 
-      this.logger.log(`[ROOM_USER_UNBAN_SUCCESS] 방ID:${roomId} | 방장ID:${ownerId} | 대상ID:${targetUserId}`);
+    this.logger.log(`[ROOM_USER_UNBAN_SUCCESS] 방ID:${roomId} | 방장ID:${ownerId} | 대상ID:${targetUserId}`);
 
-      return true;
-    } catch (err) {
-      this.logger.error(`[ROOM_USER_UNBAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
-      throw new InternalServerErrorException('밴 해제 처리 중 오류가 발생했습니다.');
-    }
+    return true;
   }
 
   getBannedUsersByRoomId(roomId: number): Promise<RoomUser[]> {

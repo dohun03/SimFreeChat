@@ -1,6 +1,11 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, Matches, IsEmail, IsOptional } from 'class-validator';
 
 export class UpdateUserDto {
+  @ApiPropertyOptional({ 
+    description: '수정할 이름', 
+    example: '임꺽정' 
+  })
   @IsOptional()
   @IsString()
   @Matches(/^(?:[가-힣]{2,12}|[a-zA-Z0-9]{2,12})$/, {
@@ -8,6 +13,10 @@ export class UpdateUserDto {
   })
   name?: string;
 
+  @ApiPropertyOptional({ 
+    description: '수정할 비밀번호', 
+    example: 'newpass1234' 
+  })
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9!@#$%^&*(),.?":{}|<>]{4,16}$/, {
@@ -15,6 +24,10 @@ export class UpdateUserDto {
   })
   password?: string;
 
+  @ApiPropertyOptional({ 
+    description: '수정할 이메일', 
+    example: 'new@example.com' 
+  })
   @IsOptional()
   @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
   email?: string;

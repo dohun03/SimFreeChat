@@ -89,12 +89,20 @@ export async function renderAdminUsers(container, user) {
     try {
       const offset = (state.currentPage - 1) * state.limit;
 
-      const params = new URLSearchParams({
+      // 1. 보낼 데이터 객체 생성
+      const queryObj = {
         search: searchInput.value.trim(),
         isAdmin: adminFilter.value,
         isBanned: banFilter.value,
         limit: state.limit,
         offset: offset
+      };
+
+      const params = new URLSearchParams();
+      Object.entries(queryObj).forEach(([key, value]) => {
+        if (value !== "" && value !== null && value !== undefined) {
+          params.append(key, value);
+        }
       });
 
       const res = await fetch(`/api/users?${params.toString()}`, {

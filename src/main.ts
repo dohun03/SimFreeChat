@@ -5,12 +5,16 @@ import { winstonConfig } from './common/configs/logger.config';
 import { AppModule } from './app.module';
 import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
     logger: WinstonModule.createLogger(winstonConfig),
   });
+
+  app.use(cookieParser());
+  app.setGlobalPrefix('api');
 
   // CORS 설정
   app.enableCors({
@@ -22,6 +26,16 @@ async function bootstrap() {
   const redisIoAdapter = new RedisIoAdapter(app);
   await redisIoAdapter.connectToRedis();
   app.useWebSocketAdapter(redisIoAdapter);
+
+  // Swagger 설정
+  const config = new DocumentBuilder()
+    .setTitle('SimFreeChat Server API')
+    .setDescription('The Chatting Service API description')
+    .build();
+    
+  const document = SwaggerModule.createDocument(app, config);
+  
+  SwaggerModule.setup('api/docs', app, document);
 
   // DTO 자동 검사
   app.useGlobalPipes(
@@ -41,10 +55,6 @@ async function bootstrap() {
       },
     }),
   );
-
-  app.use(cookieParser());
-
-  app.setGlobalPrefix('api');
 
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');
 

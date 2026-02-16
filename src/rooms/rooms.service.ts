@@ -6,7 +6,7 @@ import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { Room } from './rooms.entity';
 import * as bcrypt from 'bcrypt';
-import { RoomResponseDto } from './dto/response-room.dto';
+import { ResponseRoomDto } from './dto/response-room.dto';
 import { User } from 'src/users/users.entity';
 import { SocketEvents } from 'src/socket/socket.events';
 import path from 'path';
@@ -27,7 +27,7 @@ export class RoomsService {
   ) {}
 
   // 방 생성
-  async createRoom(userId: number, createRoomDto: CreateRoomDto) {
+  async createRoom(userId: number, createRoomDto: CreateRoomDto): Promise<ResponseRoomDto> {
     const { name, maxMembers, password } = createRoomDto;
 
     const hashedPassword = password ? await bcrypt.hash(password, BCRYPT_SALT_ROUNDS) : null;
@@ -51,7 +51,7 @@ export class RoomsService {
   }
 
   // 방 수정
-  async updateRoom(roomId: number, userId: number, updateRoomDto: UpdateRoomDto): Promise<Omit<Room, 'password'> & { password: boolean }> {
+  async updateRoom(roomId: number, userId: number, updateRoomDto: UpdateRoomDto): Promise<ResponseRoomDto> {
     const { name, maxMembers, password } = updateRoomDto;
 
     const room = await this.roomRepository.findOne({
@@ -165,7 +165,7 @@ export class RoomsService {
   }
 
   // 방 전체 조회
-  async getAllRooms(sort: string = 'popular_desc', search?: string): Promise<RoomResponseDto[]> {
+  async getAllRooms(sort: string = 'popular_desc', search?: string): Promise<ResponseRoomDto[]> {
     const qb = this.roomRepository.createQueryBuilder('room')
       .leftJoinAndSelect('room.owner', 'owner')
       .select([
@@ -204,7 +204,7 @@ export class RoomsService {
   }
 
   // 방 하나 조회
-  async getRoomById(roomId: number): Promise<RoomResponseDto> {
+  async getRoomById(roomId: number): Promise<ResponseRoomDto> {
     const room = await this.roomRepository.findOne({
       where: { id: roomId },
       relations: ['owner'],

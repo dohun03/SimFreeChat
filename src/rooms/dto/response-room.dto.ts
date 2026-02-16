@@ -1,7 +1,7 @@
-export class RoomResponseDto {
+export class ResponseRoomDto {
   id: number;
   name: string;
-  currentMembers: number;
+  currentMembers?: number;
   maxMembers: number;
   password: boolean;
   createdAt: Date;

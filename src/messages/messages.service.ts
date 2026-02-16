@@ -8,6 +8,8 @@ import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
 import { RedisService } from 'src/redis/redis.service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GetAllMessageLogsQueryDto } from './dto/get-all-message-logs-query.dto';
+import { GetRoomMessagesDto } from './dto/get-room-messages.dto';
 
 @Injectable()
 export class MessagesService {
@@ -156,7 +158,7 @@ export class MessagesService {
     }
   }
   
-  async getMessagesByRoom(roomId: number, query: any): Promise<ResponseMessageDto[]> {
+  async getMessagesByRoom(roomId: number, query: GetRoomMessagesDto): Promise<ResponseMessageDto[]> {
     const { cursor, direction } = query;
     const limit = 100;
 
@@ -249,7 +251,7 @@ export class MessagesService {
     }
   }
 
-  async getAllMessageLogs(user: any, query: any): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
+  async getAllMessageLogs(user: any, query: GetAllMessageLogsQueryDto): Promise<{ messageLogs: MessageLog[]; totalCount: number }> {
     if (!user?.isAdmin) {
       this.logger.warn(`[ADMIN_ACCESS_DENIED] 유저ID:${user.id} | 사유:권한없음`);
       throw new ForbiddenException('권한이 없습니다.');

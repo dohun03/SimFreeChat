@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, InternalServerErrorException, Logger, U
 import { InjectRepository } from '@nestjs/typeorm';
 import { SocketService } from 'src/socket/socket.service';
 import { RedisService } from 'src/redis/redis.service';
-import { LoginUserDto } from './dto/login-user.dto';
+import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { User } from 'src/users/users.entity';
 import { Repository } from 'typeorm';
@@ -19,8 +19,8 @@ export class AuthService {
     private readonly socketService: SocketService,
   ) {}
 
-  async logIn(loginUserDto: LoginUserDto): Promise<{ sessionId: string, safeUser: any }> {
-    const { name, password } = loginUserDto;
+  async logIn(loginDto: LoginDto): Promise<{ sessionId: string, safeUser: any }> {
+    const { name, password } = loginDto;
 
     const user = await this.userRepository.findOne({
       where: { name: name },

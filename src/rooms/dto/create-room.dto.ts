@@ -1,7 +1,9 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsBoolean, IsInt, Min, Max, IsNotEmpty, Matches } from 'class-validator';
 
 export class CreateRoomDto {
+  @ApiProperty({ description: '방 제목', example: '테스트 방' })
   @IsNotEmpty({ message: '방 제목을 입력해주세요.' })
   @IsString()
   @Matches(/^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9 _!@#$%^&*()\-+=~]{2,30}$/, {
@@ -9,11 +11,13 @@ export class CreateRoomDto {
   })
   name: string;
 
+  @ApiProperty({ description: '최대 인원', example: 10 })
   @IsInt({ message: '방 인원수를 숫자로 입력해주세요.' })
   @Min(2, { message: '최소 2명 이상을 입력해주세요.' })
   @Max(50, { message: '최대 50명까지 입력해주세요.' })
   maxMembers: number;
 
+  @ApiProperty({ description: '비밀번호', required: false })
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9!@#$%^&*(),.?":{}|<>]{4,16}$/, {

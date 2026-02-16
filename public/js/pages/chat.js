@@ -594,7 +594,7 @@ export async function renderChatRoom(container, user, roomId) {
 
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('thumbnail', thumbnailBlob);
+      formData.append('thumbnail', thumbnailBlob, 'thumbnail.webp');
 
       try {
         const res = await fetch(`/api/uploads/${roomId}`, { method: 'POST', body: formData, credentials: 'include' });
