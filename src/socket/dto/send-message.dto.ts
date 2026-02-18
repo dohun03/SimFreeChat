@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsString, IsEnum } from "class-validator";
+import { IsNotEmpty, IsNumber, IsString, IsEnum, MaxLength, MinLength } from "class-validator";
 
 export enum MessageType {
   TEXT = 'text',
@@ -9,8 +9,9 @@ export class SendMessageDto {
   @IsNumber()
   roomId: number;
 
-  @IsNotEmpty({ message: '메시지를 입력해주세요.' })
   @IsString()
+  @MinLength(1, { message: '메시지를 입력해주세요.' })
+  @MaxLength(500, { message: '메시지는 최대 500자까지만 가능합니다.' })
   content: string;
 
   @IsNotEmpty({ message: '타입을 입력해주세요.' })

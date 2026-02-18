@@ -14,6 +14,8 @@ import { RoomUsersModule } from './room-users/room-users.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { Logger, QueryRunner } from 'typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 
 @Module({
   imports: [
@@ -43,6 +45,30 @@ import { ScheduleModule } from '@nestjs/schedule';
         },
       }),
       inject: [ConfigService],
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'chat_limit',
+            ttl: 10, // 10초, 10000ms
+            limit: 10,  // 10회
+            blockDuration: 1,
+          },
+        ],
+        generateKey: (context) => {
+          const client = context.switchToWs().getClient();
+          const userId = client.data?.user?.id;
+          // 소켓 연결 시 저장한 user객체의 ID를 키로 사용 (없으면 소켓 ID)
+          return userId ? `throttle_user:${userId}` : `throttle_id:${client.id}`;
+        },
+        storage: new ThrottlerStorageRedisService({
+          host: config.get<string>('REDIS_HOST') || 'localhost',
+          port: config.get<number>('REDIS_PORT') || 6379,
+        }),
+      }),
     }),
     EventEmitterModule.forRoot(),
     UsersModule,

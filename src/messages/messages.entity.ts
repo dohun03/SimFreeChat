@@ -23,7 +23,7 @@ export class Message {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column('text')
+  @Column({ type: 'varchar', length: 500 })
   content: string;
 
   @Column({

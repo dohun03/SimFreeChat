@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, InternalServerErro
 import { InjectRepository } from '@nestjs/typeorm';
 import { Room } from 'src/rooms/rooms.entity';
 import { User } from 'src/users/users.entity';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, Like } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
 import { MessageLog } from './message-logs.entity';
 import { Message, MessageType } from './messages.entity';
@@ -53,20 +53,20 @@ export class MessagesService {
     content: string,
     type: string
   ): Promise<{ message: ResponseMessageDto; lastMessageId?: string }> {
+    const [room, user] = await Promise.all([
+      this.roomRepository.findOne({ 
+        where: { id: roomId },
+        select: ['id', 'name'],
+        relations: ['owner']
+      }),
+      this.userRepository.findOne({ 
+        where: { id: userId },
+        select: ['id', 'name', 'isAdmin']
+      }),
+    ]);
+    if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
+    
     try {
-      const [room, user] = await Promise.all([
-        this.roomRepository.findOne({ 
-          where: { id: roomId },
-          select: ['id', 'name'],
-          relations: ['owner']
-        }),
-        this.userRepository.findOne({ 
-          where: { id: userId },
-          select: ['id', 'name', 'isAdmin']
-        }),
-      ]);
-      if (!room || !user) throw new NotFoundException('유효하지 않은 방 또는 유저입니다.');
-
       const lastMessageId = await this.redisService.getRoomLastMessageId(roomId);
       
       const messageId = this.generateCustomId();
@@ -158,6 +158,7 @@ export class MessagesService {
     }
   }
   
+  // 방별 메시지 조회
   async getMessagesByRoom(roomId: number, query: GetRoomMessagesDto): Promise<ResponseMessageDto[]> {
     const { cursor, direction } = query;
     const limit = 100;
@@ -165,7 +166,9 @@ export class MessagesService {
     // 캐시 메시지 반환
     if (!cursor) {
       const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
-      if (cachedMessages.length > 0) return cachedMessages;
+      if (cachedMessages.length > 0) {
+        return cachedMessages;
+      }
     }
 
     // DB 메시지 반환

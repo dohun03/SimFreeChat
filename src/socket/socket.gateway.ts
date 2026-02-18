@@ -24,8 +24,10 @@ import { LeaveRoomDto } from './dto/leave-room.dto';
 import { DeleteMessageDto } from './dto/delete-message.dto';
 import { KickUserDto } from './dto/kick-user.dto';
 import { BanUserDto } from './dto/ban-user.dto';
-import { Logger, UseGuards } from '@nestjs/common';
+import { Logger, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { WsSessionGuard } from './guards/ws-session.guard';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
+import { WsThrottlerGuard } from './guards/ws-throttler.guard';
 
 @WebSocketGateway({
   cors: {
@@ -139,7 +141,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
       const userId = client.data.user.id; 
       const dto = await this.validateDto(JoinRoomDto, payload);
       const { roomId, password } = dto;
-
       const { roomUsers, afterCount, joinUser } = await this.socketService.joinRoom(roomId, userId, password);
 
       await this.removeUserSocket(roomId, userId);
@@ -210,17 +211,26 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     this.removeUserSocket(roomId, userId);
   }
 
+  @UseGuards(WsThrottlerGuard)
+  @Throttle({ chat_limit: { limit: 10, ttl: 10 } })
   @SubscribeMessage('sendMessage')
   async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
       const userId = client.data.user.id;
       const dto = await this.validateDto(SendMessageDto, payload);
-      
       const message = await this.messagesService.createMessage(dto.roomId, userId, dto.content, dto.type);
   
       this.server.to(dto.roomId.toString()).emit('messageCreate', message);
     } catch (err) {
+      console.log('트롤러체크:',err);
+      if (err.status === 429 || err.name === 'ThrottlerException' || err.message.includes('Throttler')) {
+        client.emit('exception', { message: '너무 빠르게 메시지를 보내고 있습니다.' });
+        return;
+      }
+
       this.logger.error(`[MESSAGE_SEND_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.user.id} | 사유:${err.message}`);
+
+      client.emit('exception', { message: err.message });
     }
   }
 
@@ -245,7 +255,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
   ) {
     const { roomId, lastMessageId } = payload;
     if (!roomId || !lastMessageId) return;
-
     const missedMessages = await this.messagesService.getMissedMessages(roomId, lastMessageId);
     
     if (missedMessages.length > 0) {
@@ -261,7 +270,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     try {
       const dto = await this.validateDto(KickUserDto, payload);
       const owner = client.data.user;
-
       const { roomUsers, roomUserCount, kickedUser } = await this.socketService.kickUser(dto.roomId, dto.userId, owner);
 
       await this.removeUserSocket(dto.roomId, dto.userId);
