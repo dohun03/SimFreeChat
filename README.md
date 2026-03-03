@@ -2,7 +2,7 @@
 
 ## 📋 프로젝트 개요
 
-**SimFreeChat**은 **NestJS와 Socket.io** 기반의 실시간 멀티미디어 채팅 서비스입니다.  
+**SimFreeChat**은 **NestJS, Socket.io, React** 기반의 실시간 멀티미디어 채팅 서비스입니다.  
 웹소켓 기반의 저지연 **텍스트 및 이미지(원본/썸네일)** 송수신을 지원합니다.  
 **Gemini AI**를 연동하여 누적된 대화의 **핵심 내용을 요약**해 주는 기능을 제공합니다.  
 **Redis**을 통해 세션과 유저 상태, 메시지 등을 캐싱하여 DB 부하를 최소화했습니다.  
@@ -16,19 +16,27 @@
 
 ## 🏗️ 서비스 아키텍처
 
-<img width="100%" alt="Service Architecture" src="https://github.com/user-attachments/assets/24ee7e65-fcca-464b-8d7b-e4d16a3a0059" />
+<img width="100%" alt="Service Architecture" src="https://github.com/user-attachments/assets/651cb717-8c2b-419d-85c0-9dfbce53c6df" />
 
 ---
 
 ## 🛠️ 기술 스택
 
-### 백엔드 및 실시간 통신
+### 백엔드
 <div align="left">
   <img src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
   <img src="https://img.shields.io/badge/NestJS-E0234E?style=flat-square&logo=nestjs&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img src="https://img.shields.io/badge/Socket.io-010101?style=flat-square&logo=socketdotio&logoColor=white" />
   <img src="https://img.shields.io/badge/Gemini_AI-8E75E9?style=flat-square&logo=googlegemini&logoColor=white" />
+</div>
+
+### 프론트엔드
+<div align="left">
+  <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white" />
 </div>
 
 ### 데이터베이스 및 캐싱
@@ -53,6 +61,7 @@
 | :--- | :--- |
 | **NestJS** | 모듈화된 아키텍처 기반의 확장성 있는 서버 로직 구현 |
 | **Socket.io** | 실시간 양방향 메시지 통신 처리 |
+| **React** | Component 기반 UI 설계 및 상태 관리 최적화 |
 | **Gemini API** | 대화 맥락 파악 및 실시간 요약 기능 |
 | **Redis** | 빠른 속도를 위한 데이터 캐싱, 세션 상태 관리 및 DB Write-Back 버퍼링 |
 | **MySQL(AWS RDS)** | 영구적 데이터 저장 용도 |
@@ -61,8 +70,6 @@
 | **Nginx** | 리버스 프록시 설정, 로드밸런싱, 정적 리소스 서빙 |
 | **Docker** | 애플리케이션의 컨테이너화로 환경 독립성 및 배포 편의성 확보 |
 | **GitHub Actions** | 코드 푸시부터 배포까지의 CI/CD 파이프라인 자동화 구축 |
-| **JavaScript** | 클라이언트 사이드 동적 UI 조작 및 소켓 이벤트 핸들링 |
-| **Bootstrap** | 반응형 웹 디자인 적용으로 다양한 디바이스 환경 대응 |
 
 ---
 
@@ -119,8 +126,11 @@
 본 프로젝트는 Docker 환경에서 가장 쉽고 빠르게 실행할 수 있습니다.
 
 ### 1. 저장소 클론
+
+```bash
 git clone https://github.com/dohun03/SimFreeChat.git  
 cd [프로젝트명]
+```
 
 ### 2. 환경 변수 설정 (.env 파일 생성)
 
@@ -139,7 +149,7 @@ DB_NAME=
 REDIS_HOST=
 REDIS_PORT=
 
-# 서버 IP (예: http://localhost:3000 또는 실제 도메인)
+# 서버 IP (예: http://localhost 또는 실제 도메인)
 SERVER_URL=
 
 # 구글 AI 스튜디오에서 발급받은 키
@@ -148,12 +158,23 @@ GEMINI_API_KEY=
 # Bcrypt 단계
 BCRYPT_SALT_ROUNDS=
 
+# Docker Hub 아이디
+DOCKERHUB_USERNAME=
+
 MY_UID=1000
 MY_GID=1000
+TZ=Asia/Seoul
 ```
 
 ### 3. 컨테이너 실행
+
+```bash
+# 개발 환경
 docker-compose up -d --build
+
+# 운영 환경 (배포용 최적화)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
 
 ---
 

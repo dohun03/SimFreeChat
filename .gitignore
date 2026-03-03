@@ -1,19 +1,35 @@
-# 빌드 결과물 및 의존성
-/dist
-/node_modules
-/build
+# [의존성 및 빌드]
+**/node_modules/
+**/dist/
+**/build/
+.cache/
 
-# 로컬/서버 데이터
-/redis-data
-/redis-data-dev
-/uploads
-/logs
-/traffic_test
+# [로컬/서버 데이터 저장소]
+/redis-data*/
+uploads/
+logs/
+backend/logs/
+backend/uploads/
+traffic_test/
 
-# 환경 변수 및 설정
+# [환경 변수 및 설정]
 .env
+.env.*
 .git
 
-# 기타 (OS 로그 등)
-*.log
+# [IDE 및 OS]
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 .DS_Store
+Thumbs.db
+
+# [로그 파일]
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

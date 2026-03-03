@@ -17,10 +17,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push NestJS Image
+      - name: Build and Push Images
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/my-chat-server:latest
+          docker build --target production -t ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest ./backend
+          docker build --target production -t ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest ./frontend
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/backend:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
 
       - name: Copy config files to EC2
         uses: appleboy/scp-action@master
@@ -28,7 +30,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_KEY }}
-          source: "docker-compose.yml,docker-compose.prod.yml,nginx.conf,public/"
+          source: "docker-compose.yml,docker-compose.prod.yml,nginx.conf"
           target: "~/app/"
 
       - name: Deploy to EC2
@@ -39,14 +41,24 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             mkdir -p ~/app/logs/info ~/app/logs/error ~/app/uploads
-            sudo chown -R $USER:$USER ~/app
-            sudo chmod -R 777 ~/app/logs ~/app/uploads
+            sudo chown -R ubuntu:ubuntu ~/app/logs ~/app/uploads
+            sudo chmod -R 755 ~/app/logs ~/app/uploads
             
             cd ~/app
             export MY_UID=$(id -u)
             export MY_GID=$(id -g)
-            
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+
+            # 1. 새 이미지 가져오기
             docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            
+            # 2. 기존 컨테이너 중지 및 삭제 (구조가 대규모로 바뀌었으니 안전하게)
+            docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+            
+            # 3. 새로 올리기
             docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
             
-            docker exec nginx-proxy nginx -s reload || true
+            # 4. 찌꺼기 이미지(dangling images) 정리 (용량 확보)
+            docker image prune -f
+            
+            docker exec nginx nginx -s reload || true

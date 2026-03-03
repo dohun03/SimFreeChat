@@ -1,0 +1,55 @@
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  /* 페이지 이동 시 화면 덜컹거림 방지 */
+  overflow-y: scroll;
+}
+
+body {
+  /* @apply를 붙여야 테일윈드 클래스를 CSS에서 쓸 수 있습니다 */
+  @apply bg-slate-50 text-slate-900;
+  min-height: 100vh;
+}
+
+#root {
+  /* height: 100% 대신 min-height를 써서 컨텐츠가 길어지면 늘어나게 합니다 */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes modal-backdrop-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-box-appear {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95) translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1) translateY(0); 
+  }
+}
+
+.animate-modal-backdrop {
+  animation: modal-backdrop-fade 0.3s ease-out forwards;
+}
+
+.animate-modal-content {
+  animation: modal-box-appear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}

@@ -1,25 +1,34 @@
 services:
-  my-chat-server:
+  frontend:
     build:
-      context: .
+      context: ./frontend
+      target: production 
+
+  backend:
+    build:
+      context: ./backend
       target: production
+    user: "1000:1000"
     deploy:
       replicas: 2
     environment:
       - NODE_ENV=production
       - MY_UID=${MY_UID}
       - MY_GID=${MY_GID}
+    volumes:
+    - ~/app/logs:/usr/src/app/logs:rw
+    - ~/app/uploads:/usr/src/app/uploads:rw
     logging: &default-logging
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  redis-service:
+  redis:
     logging: *default-logging
 
-  nginx-proxy:
-    container_name: nginx-proxy
-    volumes:
-      - ./public:/usr/share/nginx/html:ro
+  nginx:
+    container_name: nginx
     logging: *default-logging
+    volumes:
+    - ~/app/uploads:/usr/src/app/uploads:ro

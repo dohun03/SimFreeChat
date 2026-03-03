@@ -1,23 +1,29 @@
 services:
-  my-chat-server:
-    build: 
-      context: .
-      target: development
+  frontend:
+    build:
+      context: ./frontend
+      target: production 
+    environment:
+      - NODE_ENV=development
+
+  backend:
+    build:
+      context: ./backend
+      target: production
     deploy:
-      replicas: 2
+      replicas: 2 
+    ports:
+      - "4000"
     environment:
       - NODE_ENV=development
       - DB_HOST=host.docker.internal
-      - REDIS_HOST=redis-service
+      - REDIS_HOST=redis
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    command: npm run start:dev
+      - ${PWD}/logs:/usr/src/app/logs:rw
+      - ${PWD}/uploads:/usr/src/app/uploads:rw
+    command: node dist/main 
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  nginx-proxy:
-    container_name: nginx-web-dev
-    volumes:
-      - ./public:/usr/share/nginx/html:ro
-      - ./uploads:/usr/src/app/uploads:ro
+  nginx:
+    container_name: nginx

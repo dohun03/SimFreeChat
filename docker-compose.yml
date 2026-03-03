@@ -1,7 +1,20 @@
 services:
-  my-chat-server:
-    image: dohun03/my-chat-server:latest
-    user: "${MY_UID}:${MY_GID}"
+  frontend:
+    image: ${DOCKERHUB_USERNAME}/frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development 
+    restart: always
+    networks:
+      - chat-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    image: ${DOCKERHUB_USERNAME}/backend:latest
     restart: always
     ulimits:
       nofile:
@@ -15,12 +28,12 @@ services:
     environment:
       - TZ=Asia/Seoul
     depends_on:
-      redis-service:
+      redis:
         condition: service_healthy
     networks:
       - chat-network
 
-  redis-service:
+  redis:
     image: redis:alpine
     restart: always
     ulimits:
@@ -36,7 +49,7 @@ services:
     networks:
       - chat-network
 
-  nginx-proxy:
+  nginx:
     image: nginx:alpine
     restart: always
     ulimits:
@@ -49,7 +62,8 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./uploads:/usr/src/app/uploads:ro
     depends_on:
-      - my-chat-server
+      - backend
+      - frontend
     networks:
       - chat-network
 

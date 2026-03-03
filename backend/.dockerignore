@@ -1,0 +1,22 @@
+# 의존성 및 빌드 결과물 (필수)
+node_modules
+dist
+npm-debug.log*
+
+# 로컬 데이터 및 테스트 도구
+logs/
+uploads/
+redis-data/
+traffic_test/
+
+# 설정 및 소스 관리 (이미지 보안 및 효율)
+.git
+.gitignore
+.env*
+Dockerfile
+docker-compose*
+nginx.conf
+README.md
+
+# OS 생성 파일
+.DS_Store
