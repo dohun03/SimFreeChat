@@ -4,10 +4,10 @@ dist
 npm-debug.log*
 
 # 로컬 데이터 및 테스트 도구
-logs/
-uploads/
-redis-data/
-traffic_test/
+/redis-data*/
+/uploads/
+/logs/
+/traffic_test/
 
 # 설정 및 소스 관리 (이미지 보안 및 효율)
 .git
