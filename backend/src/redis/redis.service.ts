@@ -275,6 +275,7 @@ export class RedisService implements OnModuleInit {
   }
 
   // [버퍼 메시지&로그 저장]
+  // FIFO, 큐 방식, 오른쪽이 제일 최신 메시지
   async pushMessageAndLog(messageData: any, logData: any) {
     const roomId = messageData.room.id;
     const multi = this.redis.multi();

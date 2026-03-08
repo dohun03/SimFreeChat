@@ -13,6 +13,8 @@ type MessageListProps = {
   messages: Message[];
   currentUserId: number;
   roomId: number;
+  jumpTargetId?: number | null;
+  onJumpComplete?: () => void;
   onLoadBefore?: () => void;
   onDelete?: (id: number) => void;
   onUserClick?: (userId: number) => void;
@@ -24,39 +26,26 @@ function isDateItem(item: Message | DateItem): item is DateItem {
 }
 
 export function MessageList({ 
-  messages, 
-  currentUserId, 
-  roomId, 
-  onLoadBefore, 
+  messages,
+  currentUserId,
+  roomId,
+  jumpTargetId,
+  onJumpComplete,
+  onLoadBefore,
   onLoadRecent,
   serverLastId,
-  ...props 
+  ...props
 }: MessageListProps & { onLoadRecent?: () => void, serverLastId?: number }) {
-  // useRef = DOM 저장용, div태그만 받겠다는 뜻, .current 속성에 항상 들어있음
-  // 또는 변수 저장용, 일반 선언과 다르게 재 렌더링 시 초기화 안됨.
   const containerRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<number | string | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [topLock, setTopLock] = useState(false);
   const [bottomLock, setBottomLock] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const scrollSnapshot = useRef<{ height: number; top: number } | null>(null);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
-    // const container = containerRef.current;
-    // if (!container) return;
-    
-    // // 1차 즉시 이동
-    // container.scrollTop = container.scrollHeight;
-
-    // // 2차 레이아웃 보정 (렌더링 지연 대응)
-    // requestAnimationFrame(() => {
-    //   container.scrollTop = container.scrollHeight;
-    // });
-
-    // // 3차 최종 보정 (이미지나 긴 텍스트 렌더링 시간 벌기)
-    // setTimeout(() => {
-    //   if (container) container.scrollTop = container.scrollHeight;
-    // }, 100);
     const container = containerRef.current;
     if (!container) return;
     
@@ -90,13 +79,35 @@ export function MessageList({
   }, [messages]);
 
   useLayoutEffect(() => {
+    if (!jumpTargetId || messages.length === 0) return;
+
     const container = containerRef.current;
-    if (!container || isInitialLoading) return;
+    if (!container) return;
+
+    // 브라우저 렌더링이 완료된 후 실행되도록 큐에 넣음
+    requestAnimationFrame(() => {
+      const targetElement = document.getElementById(`msg-${jumpTargetId}`);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+        
+        targetElement.classList.add('animate-highlight');
+        setTimeout(() => targetElement.classList.remove('animate-highlight'), 2000);
+
+        // 점프가 완료되었음을 확실히 한 뒤에 상태 해제
+        setIsInitialLoading(false);
+        onJumpComplete?.();
+      }
+    });
+  }, [jumpTargetId, messages.length]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || isInitialLoading || jumpTargetId) return;
 
     const currentLastMessage = messages[messages.length - 1];
     const currentLastId = currentLastMessage?.id || null;
 
-    // 과거 데이터 로드 스냅샷 (이건 기존 유지)
+    // 과거 데이터 로드 스냅샷
     if (scrollSnapshot.current) {
       const { height, top } = scrollSnapshot.current;
       const addedHeight = container.scrollHeight - height;
@@ -107,33 +118,24 @@ export function MessageList({
     }
 
     const isNewMessage = currentLastId !== lastMessageIdRef.current;
-    lastMessageIdRef.current = currentLastId;
-
     if (!isNewMessage) return;
 
+    const isRealEnd = Number(currentLastId) >= (serverLastId || 0);
     const isMyMessage = currentLastMessage?.user?.id === currentUserId;
-    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 250;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
 
-    if (isAtBottom || isMyMessage) {
+    // 내 메시지이거나 이미 바닥을 보고 있을 때만 스크롤 이동
+    if (isRealEnd && (isAtBottom || isMyMessage)) {
       scrollToBottom('auto');
     }
-  }, [messages, currentUserId, isInitialLoading]);
+    
+    lastMessageIdRef.current = currentLastId;
+  }, [messages, currentUserId, isInitialLoading, jumpTargetId, serverLastId]);
 
-  // useEffect(() => {
-  //   if (messages.length > 0 && isInitialLoading) {
-  //     // 컴포넌트 마운트 후 렌더링 시간을 충분히 주기 위해 지연 실행
-  //     const timer = setTimeout(() => {
-  //       scrollToBottom('smooth');
-  //       setIsInitialLoading(false);
-  //     }, 200); 
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [messages.length, isInitialLoading]);
   useEffect(() => {
     if (messages.length > 0 && isInitialLoading) {
-      // 0ms로 즉시 실행
       const timer = setTimeout(() => {
-        scrollToBottom(); // behavior 인자 없이 실행 (기본 auto)
+        scrollToBottom();
         setIsInitialLoading(false);
       }, 0); 
       return () => clearTimeout(timer);
@@ -154,8 +156,8 @@ export function MessageList({
 
     // 2. BOTTOM 스크롤 (최신 로드)
     const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 20;
-    const myLastId = Number(messages[messages.length - 1]?.id || 0);
-
+    const currentList = messagesRef.current; 
+    const myLastId = Number(currentList[currentList.length - 1]?.id || 0);
     // 바닥에 도달했고, 현재 내 마지막 ID < 서버의 마지막 ID
     if (!bottomLock && isAtBottom && onLoadRecent && myLastId < (serverLastId || 0)) {
       setBottomLock(true);

@@ -37,7 +37,10 @@ export function MessageItem({
   const getOriginalUrl = (filename: string) => `/uploads/rooms/${roomId}/${filename}`;
 
   return (
-    <li className={`group mb-4 flex w-full ${isMine ? 'justify-end' : 'justify-start'} px-6`}>
+    <li
+      id={`msg-${message.id}`}
+      className={`group mb-4 flex w-full ${isMine ? 'justify-end' : 'justify-start'} px-6 transition-colors duration-500 ease-in-out`}
+    >
       <div className={`flex max-w-[85%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
         
         {/* 이름 & 시간 영역 */}

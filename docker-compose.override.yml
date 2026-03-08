@@ -2,28 +2,35 @@ services:
   frontend:
     build:
       context: ./frontend
-      target: production 
+      target: development # 빌드된 파일 대신 Vite 개발 서버 실행
+    volumes:
+      - ./frontend:/app # 소스 코드 실시간 동기화
+      - /app/node_modules # 컨테이너 내부 라이브러리 보호
     environment:
       - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true # WSL2 파일 감지 최적화
 
   backend:
     build:
       context: ./backend
-      target: production
+      target: development # dist 실행 대신 npm run start:dev 실행
     deploy:
-      replicas: 2 
-    ports:
-      - "4000"
+      replicas: 2 # 형님 말씀대로 2개 띄웁니다!
+    # ports: "4000" -> 삭제하세요. Nginx가 내부망(chat-network)으로 뿌려줄 겁니다.
     environment:
       - NODE_ENV=development
       - DB_HOST=host.docker.internal
       - REDIS_HOST=redis
     volumes:
-      - ${PWD}/logs:/usr/src/app/logs:rw
-      - ${PWD}/uploads:/usr/src/app/uploads:rw
-    command: node dist/main 
+      - ./backend:/usr/src/app # 백엔드 소스 실시간 동기화 (Hot Reload)
+      - /usr/src/app/node_modules # 라이브러리 꼬임 방지
+      - ./logs:/usr/src/app/logs:rw # 루트 logs 폴더 연결
+      - ./uploads:/usr/src/app/uploads:rw # 루트 uploads 폴더 연결
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   nginx:
     container_name: nginx
+    ports:
+      - "80:80"
+    # volumes는 공통 파일에 있으니 여기선 생략하거나 점검만 하세요.

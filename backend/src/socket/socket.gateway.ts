@@ -67,7 +67,7 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
   }
   
   async handleConnection(client: Socket) {
-    this.logger.log('[CONNECT] 소켓ID', client.id);
+    this.logger.log(`[CONNECT] 소켓ID:${client.id}`);
   }
   
   async handleDisconnect(client: Socket) {

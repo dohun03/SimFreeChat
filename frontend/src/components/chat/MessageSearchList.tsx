@@ -1,83 +1,89 @@
-import { Search } from 'lucide-react';
+import { ChevronDown, Search, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { apiGet } from '../../services/api';
 import { formatDate } from '../../utils/format';
 
-export function MessageSearchList({ roomId }: { roomId: number }) {
+export function MessageSearchList({ 
+  roomId, 
+  onMessageClick
+}: { 
+  roomId: number, 
+  onMessageClick?: (message: any) => void 
+}) {
   const [query, setQuery] = useState('');
-  // const [results, setResults] = useState<any[]>([]);
-  const [results, setResults] = useState<any[]>([
-    {
-      id: 101,
-      user: { name: '김철수' },
-      content: '형님, 오늘 저녁에 치맥 어떠십니까? 새로 생긴 통닭집이 그렇게 맛있다네요.',
-      createdAt: '2026-02-22T18:30:00Z',
-    },
-    {
-      id: 102,
-      user: { name: '이영희' },
-      content: '방금 공지사항 확인했는데, 내일 점심 회식 장소가 블루스퀘어 식당으로 변경되었다고 합니다. 다들 참고하세요!',
-      createdAt: '2026-02-22T15:45:00Z',
-    },
-    {
-      id: 103,
-      user: { name: '박민준' },
-      content: '저번에 말씀하신 프로젝트 관련 서류들 제 메일로 한 번만 더 보내주실 수 있나요? 다시 확인해보고 싶습니다.',
-      createdAt: '2026-02-22T11:20:00Z',
-    },
-    {
-      id: 104,
-      user: { name: '정수진' },
-      content: 'ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.',
-      createdAt: '2026-02-21T22:10:00Z',
-    },
-    {
-      id: 105,
-      user: { name: '최현우' },
-      content: '혹시 이 방에 계신 분들 중에 리액트 테일윈드 잘 다루시는 분 계신가요? UI 짜는 게 생각보다 손이 많이 가네요.',
-      createdAt: '2026-02-21T09:05:00Z',
-    },
-    {
-      id: 106,
-      user: { name: '정수진' },
-      content: 'ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.',
-      createdAt: '2026-02-21T22:10:00Z',
-    },
-    {
-      id: 107,
-      user: { name: '정수진' },
-      content: 'ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.ㅋㅋㅋㅋ 아 진짜 대박이네요. 그거 제가 생각했던 거랑 너무 똑같아서 소름 돋았어요.',
-      createdAt: '2026-02-21T22:10:00Z',
-    },
-  ]);
+  const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
+  const isValidQuery = (q: string) => {
+    const trimmed = q.trim();
+    return trimmed.length >= 2 && trimmed.length <= 20;
+  };
+
+  // 검색 실행 함수
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!isValidQuery(query)) {
+      alert("검색어는 2~20자 사이로 입력해주세요.");
+      return;
+    }
     
     setLoading(true);
+    setResults([]);
+    
     try {
-      // 실제 API 구조에 맞게 조절하세요
-      const data = await apiGet(`/api/messages/${roomId}/search?q=${query}`);
+      const data = await apiGet(`/api/messages/${roomId}/search?keyword=${encodeURIComponent(query.trim())}`);
       setResults(data);
+      setHasMore(data.length === 50);
     } catch (err) {
+      alert(`검색 실패: ${err}`);
       console.error('검색 실패:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSearchMore = async () => {
+    if (results.length === 0 || loading) return;
+
+    const lastId = results[results.length - 1].id;
+    setLoading(true);
+    try {
+      const moreData = await apiGet(
+        `/api/messages/${roomId}/search?keyword=${query}&cursorId=${lastId}`
+      );
+      
+      if (moreData.length > 0) {
+        setResults(prev => [...prev, ...moreData]);
+        setHasMore(moreData.length === 50);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      alert(`추가 검색 실패: ${err}`);
+      console.error('추가 검색 실패:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  
+  const handleRenderMessage = (message: any) => {
+    console.log(`메시지 ID: ${message.id}`);
+    
+    if (onMessageClick) onMessageClick(message.id);
+  };
+
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* 1. 상단 타이틀 및 블루 검색창 */}
+      {/* 상단 타이틀 및 검색창 */}
       <div className="px-1 mb-4">
         <h3 className="text-lg font-black text-slate-800 mb-4 px-1 tracking-tight">메시지 검색</h3>
         <form onSubmit={handleSearch} className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
           <input
             type="text"
-            placeholder="대화 내용 검색..."
+            placeholder="2글자 이상 입력해주세요"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all outline-none text-slate-700 placeholder:text-slate-400"
@@ -85,20 +91,20 @@ export function MessageSearchList({ roomId }: { roomId: number }) {
         </form>
       </div>
 
-      {/* 2. 검색 결과 목록 (아바타 제거 버전) */}
+      {/* 검색 결과 목록 */}
       <div className="flex-1 overflow-y-auto px-1 custom-scrollbar">
         {results.length > 0 ? (
           <div className="space-y-2">
             {results.map((res) => (
               <div
                 key={res.id}
-                className="group flex flex-col gap-2 p-4 rounded-xl border border-gray-300 bg-white shadow-sm hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer"
-                onClick={() => {/* 메시지 이동 로직 */}}
+                onClick={() => handleRenderMessage(res)}
+                className="group flex flex-col gap-2 p-4 rounded-xl border border-gray-300 bg-white shadow-sm hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer active:scale-[0.98]"
               >
                 {/* 상단: 이름과 날짜 */}
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div> {/* 포인트 점 */}
+                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                     <span className="text-[13px] font-bold text-blue-700">
                       {res.user.name}
                     </span>
@@ -116,15 +122,37 @@ export function MessageSearchList({ roomId }: { roomId: number }) {
                 </div>
               </div>
             ))}
+
+            {/* 더 보기 버튼 영역 */}
+            {hasMore && (
+              <button
+                onClick={handleSearchMore}
+                disabled={loading}
+                className="w-full py-3 mt-2 flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-dashed border-slate-200 hover:border-blue-200 bg-white"
+              >
+                {loading ? (
+                  <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" />
+                ) : (
+                  <>
+                    <ChevronDown size={16} className="text-slate-400" />
+                    <span>검색 결과 더 보기</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             {loading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             ) : (
               <>
-                <Search size={32} className="mb-2 opacity-20" />
-                <p className="text-sm italic">{query ? '검색 결과가 없습니다' : '궁금한 대화를 검색해보세요'}</p>
+                <div className="bg-slate-50 p-4 rounded-full mb-4">
+                  <MessageSquare size={32} className="opacity-20" />
+                </div>
+                <p className="text-sm font-medium">
+                  {query ? '일치하는 대화 내용이 없습니다' : '기억나지 않는 대화를 찾아보세요'}
+                </p>
               </>
             )}
           </div>

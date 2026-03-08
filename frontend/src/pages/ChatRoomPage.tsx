@@ -26,6 +26,7 @@ export function ChatRoomPage() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [serverLastId, setServerLastId] = useState(0);
+  const [jumpTargetId, setJumpTargetId] = useState<number | null>(null);
   const [errorReason, setErrorReason] = useState<{ title: string; desc: string } | null>(null);
   const { messages, setMessages, roomUsers, typingUsers, actions } = useSocket(
     roomId, 
@@ -108,7 +109,7 @@ export function ChatRoomPage() {
 
     const currentMsgs = messagesRef.current;
     const firstId = messagesRef.current[0]?.id;
-    const lastId = messagesRef.current[messagesRef.current.length - 1]?.id;
+    const lastId = currentMsgs[currentMsgs.length - 1]?.id;
 
     let url = `/api/messages/${roomId}`;
     if (direction === 'before' && firstId) url += `?direction=before&cursor=${firstId}`;
@@ -144,6 +145,36 @@ export function ChatRoomPage() {
       loadMessages('init');
     }
   }, [roomId, !!user, !!room]);
+
+  const loadSearchedMessageAround = useCallback(async (targetId: number) => {
+    if (loadingRef.current || !roomId) return;
+
+    try {
+      loadingRef.current = true;
+      setLoading(true);
+      
+      setMessages([]); 
+
+      const msgs = await apiGet<any[]>(`/api/messages/${roomId}/context?targetId=${targetId}`);
+      
+      if (msgs && msgs.length > 0) {
+        const uniqueMap = new Map();
+        msgs.forEach(m => uniqueMap.set(m.id, m));
+        const cleanMsgs = Array.from(uniqueMap.values()).sort((a, b) => a.id - b.id);
+
+        setMessages(cleanMsgs);
+
+        setTimeout(() => {
+          setJumpTargetId(targetId);
+        }, 50);
+      }
+    } catch (err) {
+      console.error("Jump Error:", err);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, [roomId]);
 
   // 에러 화면
   if (errorReason) {
@@ -277,6 +308,8 @@ export function ChatRoomPage() {
             onDelete={deleteMessage}
             onUserClick={setSelectedUserId}
             onImageClick={setSelectedImageUrl}
+            jumpTargetId={jumpTargetId}
+            onJumpComplete={() => setJumpTargetId(null)}
           />
         </div>
 
@@ -293,7 +326,11 @@ export function ChatRoomPage() {
 
       {/* 오른쪽 사이드바: 검색 */}
       <aside className="flex w-1/4 flex-col bg-white p-6">
-        <MessageSearchList roomId={room.id} />
+        {/* 6. 검색 리스트에 클릭 핸들러 전달 (컴포넌트 내부에서 구현되어야 함) */}
+        <MessageSearchList 
+          roomId={room.id} 
+          onMessageClick={(msgId: number) => loadSearchedMessageAround(msgId)} 
+        />
       </aside>
 
       {/* 모달창들 */}

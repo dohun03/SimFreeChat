@@ -65,6 +65,23 @@ export class MessagesController {
   }
 
   @UseGuards(SessionGuard)
+  @Get(':roomId/context')
+  @ApiOperation({ summary: '특정 메시지의 주변 메시지 조회 (검색 이동용)' })
+  @ApiParam({ name: 'roomId', type: Number, description: '방 ID' })
+  @ApiQuery({ 
+    name: 'targetId', 
+    type: String, 
+    description: '중심 메시지 ID', 
+    required: true 
+  })
+  async getMessageContext(
+    @Param('roomId') roomId: number,
+    @Query('targetId') targetId: string,
+  ) {
+    return await this.messagesService.getSearchedMessageAround(roomId, targetId);
+  }
+
+  @UseGuards(SessionGuard)
   @Get(':roomId')
   @ApiOperation({ summary: '채팅방 메시지 조회'})
   @ApiParam({ name: 'roomId', type: Number, description: '방 ID' })

@@ -196,32 +196,74 @@ export class MessagesService {
 
   // 방별 메시지 검색
   async searchMessages(roomId: number, keyword: string, cursorId?: string): Promise<ResponseMessageDto[]> {
-    if (!keyword || keyword.trim().length < 2) {
-      throw new BadRequestException('2글자 이상 입력해주세요');
-    }
+    if (!keyword || keyword.trim().length < 2 || keyword.length > 20) return [];
+
+    const LIMIT = 50;
+    const trimmedKeyword = keyword.trim();
+
+    const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
+    const redisResults = cachedMessages
+    .filter(msg => {
+      if (msg.isDeleted) return false;
+      
+      // 원문 포함 여부 확인 (특수문자/초성 모두 대응 가능)
+      const isMatch = msg.content.includes(trimmedKeyword);
+      const isWithinCursor = cursorId ? Number(msg.id) < Number(cursorId) : true;
+      
+      return isMatch && isWithinCursor;
+    })
+    .reverse();
+
+    // 부족한 만큼 DB 추가 조회
+    let finalResults = [...redisResults];
+    const gap = LIMIT - finalResults.length;
+
+    if (gap > 0) {
+      const qb = this.messageRepository
+        .createQueryBuilder('message')
+        .leftJoinAndSelect('message.user', 'user')
+        .select(['message', 'user.id', 'user.name', 'user.isAdmin'])
+        .where('message.room_id = :roomId', { roomId })
+        .andWhere('message.is_deleted = false')
+
+      const hasSpecialChar = /[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s]/.test(trimmedKeyword);
     
-    const qb = this.messageRepository
-      .createQueryBuilder('message')
-      .leftJoinAndSelect('message.user', 'user')
-      .select(['message', 'user.id', 'user.name', 'user.isAdmin'])
-      .where('message.room_id = :roomId', { roomId })
-      .andWhere('MATCH(message.content) AGAINST(:keyword IN NATURAL LANGUAGE MODE)', {
-        keyword: keyword
-      });
+      if (hasSpecialChar || trimmedKeyword.length < 3) {
+        qb.andWhere('message.content LIKE :keyword', { keyword: `%${trimmedKeyword}%` });
+      } else {
+        qb.andWhere('MATCH(message.content) AGAINST(:keyword IN BOOLEAN MODE)', {
+          keyword: `${trimmedKeyword}*`
+        });
+      }
 
-    if (cursorId) {
-      qb.andWhere('message.id < :cursorId', { cursorId });
+      // 커서 조건 적용
+      if (cursorId) {
+        qb.andWhere('message.id < :cursorId', { cursorId });
+      }
+
+      // Redis 중복 값 DB 검색에서 제외
+      const redisIds = redisResults.map(msg => msg.id);
+      if (redisIds.length > 0) {
+        qb.andWhere('message.id NOT IN (:...redisIds)', { redisIds });
+      }
+
+      const dbResults = await qb
+        .orderBy('message.id', 'DESC')
+        .take(gap)
+        .getMany();
+
+      // Redis + DB 결합
+      finalResults = [...finalResults, ...dbResults];
     }
 
-    return await qb
-      .orderBy('message.id', 'DESC')
-      .take(50)
-      .getMany();
+    return finalResults
+      .sort((a, b) => Number(b.id) - Number(a.id))
+      .slice(0, LIMIT);
   }
 
   // 방별 검색된 주변 메시지 조회
   async getSearchedMessageAround(roomId: number, targetId: string): Promise<ResponseMessageDto[]> {
-    const limit = 20;
+    const limit = 50;
 
     const prevMessages = await this.messageRepository
       .createQueryBuilder('m')
@@ -240,7 +282,7 @@ export class MessagesService {
       .where('m.room_id = :roomId', { roomId })
       .andWhere('m.id >= :targetId', { targetId })
       .orderBy('m.id', 'ASC')
-      .take(limit + 1)
+      .take(limit)
       .getMany();
 
     return [...prevMessages.reverse(), ...nextMessages];
