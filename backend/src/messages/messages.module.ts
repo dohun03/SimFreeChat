@@ -6,10 +6,11 @@ import { MessageLog } from './message-logs.entity';
 import { MessagesController } from './messages.controller';
 import { Message } from './messages.entity';
 import { MessagesService } from './messages.service';
+import { RoomSummary } from './room-summary.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, MessageLog, Room, User]),
+    TypeOrmModule.forFeature([Message, MessageLog, RoomSummary,Room, User]),
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

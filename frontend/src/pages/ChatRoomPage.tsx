@@ -9,7 +9,7 @@ import { MessageInput } from '../components/chat/MessageInput';
 import { MessageSearchList } from '../components/chat/MessageSearchList';
 import { UserInfoModal } from '../modals/UserInfoModal';
 import { ImageModal } from '../modals/ImageModal';
-import { ShieldAlert, Sparkles, LogOut, ChevronDown, Users, Ban, Circle, Settings  } from 'lucide-react';
+import { ShieldAlert, Sparkles, LogOut, ChevronDown, Users, Ban, Circle, Settings, X  } from 'lucide-react';
 import { RoomBanManagerModal } from '../modals/RoomBanManagerModal';
 import { RoomEditModal } from '../modals/RoomEditModal';
 import { SummaryModal } from '../modals/SummaryModal';
@@ -23,6 +23,9 @@ export function ChatRoomPage() {
   const [showBanModal, setShowBanModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryStatus, setSummaryStatus] = useState<'idle' | 'loading' | 'done'>('idle');
+  const [cachedSummary, setCachedSummary] = useState('');
+  const [showToast, setShowToast] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [serverLastId, setServerLastId] = useState(0);
@@ -203,6 +206,24 @@ export function ChatRoomPage() {
   const { sendMessage, sendImage, sendTyping, deleteMessage, kickUser, banUser } = actions;
   const isOwner = room.owner.id === user.id;
 
+  const handleRequestSummary = async () => {
+    if (summaryStatus === 'loading') return;
+
+    setSummaryStatus('loading');
+    setShowToast(true); // 즉시 "분석 중" 토스트 표시
+
+    try {
+      const data = await apiGet<{ summary: string }>(`/api/messages/${roomId}/summary`);
+      setCachedSummary(data?.summary || '');
+      setSummaryStatus('done'); // 분석 완료 상태로 변경 (토스트 UI가 바뀜)
+    } catch (err) {
+      console.error(err);
+      setSummaryStatus('idle');
+      setShowToast(false);
+      alert('AI 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+    }
+  };
+
   return (
     <div className="flex h-full w-full bg-white text-slate-900 overflow-hidden">
       {/* 왼쪽 사이드바: 유저 목록 */}
@@ -224,8 +245,8 @@ export function ChatRoomPage() {
       </aside>
 
       {/* 메인 섹션: 채팅창 */}
-      <main className="flex flex-1 flex-col border-r border-slate-300 bg-white">
-        <header className="flex h-[72px] shrink-0 items-center border-b border-slate-300 px-4 md:px-8 shadow-sm">
+      <main className="relative flex flex-1 flex-col border-r border-slate-300 bg-white">
+        <header className="relative z-20 flex h-[72px] shrink-0 items-center border-b border-slate-300 px-4 md:px-8 shadow-sm bg-white">
           {/* 왼쪽: 제목 영역*/}
           <div className="flex h-full w-1/2 items-center min-w-0 pr-4">
             <div className="flex flex-col min-w-0 w-full">
@@ -254,11 +275,14 @@ export function ChatRoomPage() {
             
             {/* 1. AI 요약 */}
             <button 
-              onClick={() => setShowSummaryModal(true)}
-              className="group flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white p-2 xl:px-3.5 xl:py-1.5 text-[13px] font-bold text-slate-700 hover:border-purple-200 hover:bg-purple-50 transition-all shadow-sm shrink"
+              onClick={handleRequestSummary}
+              disabled={summaryStatus === 'loading'}
+              className="group flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white p-2 xl:px-3.5 xl:py-1.5 text-[13px] font-bold text-slate-700 hover:border-purple-200 hover:bg-purple-50 transition-all shadow-sm shrink disabled:opacity-50"
             >
-              <Sparkles size={16} className="shrink-0 text-purple-500" />
-              <span className="hidden xl:inline whitespace-nowrap">AI Summary</span>
+              <Sparkles size={16} className={`shrink-0 ${summaryStatus === 'loading' ? 'animate-pulse' : 'text-purple-500'}`} />
+              <span className="hidden xl:inline whitespace-nowrap">
+                {summaryStatus === 'loading' ? '분석 요청됨' : 'AI 요약'}
+              </span>
             </button>
 
             {isOwner && (
@@ -296,8 +320,49 @@ export function ChatRoomPage() {
           </div>
         </header>
 
+        {showToast && (
+          <div className={`absolute top-[72px] left-0 right-0 z-10 flex h-12 w-full items-center justify-between px-6 
+            transition-all duration-300 border-b shadow-md backdrop-blur-md
+            ${summaryStatus === 'loading' 
+              ? 'bg-white/95 border-slate-200' 
+              : 'bg-purple-50/95 border-purple-100'
+            } animate-in slide-in-from-top`}>
+            
+            <div className="flex items-center gap-3 overflow-hidden">
+              {summaryStatus === 'loading' ? (
+                <Circle size={14} className="animate-spin text-purple-400 shrink-0" />
+              ) : (
+                <Sparkles size={14} className="text-purple-600 shrink-0" fill="currentColor" />
+              )}
+              
+              <span className="text-[13px] font-bold text-slate-700 truncate">
+                {summaryStatus === 'loading' 
+                  ? "대화 흐름을 파악하여 요약본을 구성하고 있습니다." 
+                  : "요약이 준비되었습니다. 지금 바로 확인해 보세요."}
+              </span>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-4 ml-4">
+              {summaryStatus === 'done' && (
+                <button 
+                  onClick={() => { setShowSummaryModal(true); }}
+                  className="text-[13px] font-black text-purple-600 hover:text-purple-800 underline underline-offset-4"
+                >
+                  결과 보기
+                </button>
+              )}
+              <button 
+                onClick={() => { setShowToast(false); setSummaryStatus('idle'); }}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 메시지 리스트 영역 */}
-        <div className="flex-1 overflow-hidden">
+        <div className="relative z-0 flex-1 overflow-hidden">
           <MessageList 
             messages={messages} 
             currentUserId={user.id} 
@@ -314,7 +379,7 @@ export function ChatRoomPage() {
         </div>
 
         {/* 메시지 입력 영역 */}
-        <footer className="p-5 border-t border-slate-300"> 
+        <footer className="relative z-20 p-5 border-t border-slate-300 bg-white">
           <MessageInput 
             roomId={room.id} 
             onSendText={sendMessage} 
@@ -351,9 +416,9 @@ export function ChatRoomPage() {
 
       {showSummaryModal && (
         <SummaryModal 
-          roomId={Number(roomId)} 
           isOpen={showSummaryModal} 
           onClose={() => setShowSummaryModal(false)} 
+          summary={cachedSummary}
         />
       )}
       

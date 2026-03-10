@@ -1,65 +1,48 @@
-import { useEffect, useRef, useState } from 'react';
-import { apiGet } from '../services/api';
 import { ModalLayout } from '../layout/ModalLayout';
-import { X } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react'; // 아이콘 통일
 
 type SummaryModalProps = {
-  roomId: number;
   isOpen: boolean;
   onClose: () => void;
+  summary: string; // 부모가 넘겨줄 데이터
 };
 
-export function SummaryModal({ roomId, isOpen, onClose }: SummaryModalProps) {
-  const [summary, setSummary] = useState('');
-  const [loading, setLoading] = useState(false);
+const formatSummary = (text: string) => {
+  if (!text) return text;
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <strong key={i} className="font-bold text-slate-900 bg-purple-100/50 px-1 rounded-sm">
+          {part.replace(/\*\*/g, '')}
+        </strong>
+      );
+    }
+    return part;
+  });
+};
 
-  const isRequesting = useRef(false);
-
-  useEffect(() => {
-    if (!isOpen || summary || isRequesting.current) return;
-
-    isRequesting.current = true; 
-    setLoading(true);
-
-    apiGet<{ summary: string }>(`/api/messages/${roomId}/summary`)
-      .then((data) => {
-        setSummary(data?.summary || '');
-      })
-      .catch(() => {
-        setSummary('요약 생성 중 오류가 발생했습니다.');
-      })
-      .finally(() => {
-        setLoading(false);
-        isRequesting.current = false; 
-      });
-  }, [isOpen, roomId, summary]);
-
+export function SummaryModal({ isOpen, onClose, summary }: SummaryModalProps) {
   if (!isOpen) return null;
 
   return (
     <ModalLayout onClose={onClose} maxWidth="max-w-3xl">
       <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
         <div className="flex items-center gap-2">
-          <span className="text-xl">🤖</span>
+          <Sparkles size={20} className="text-purple-500" fill="currentColor" />
           <h5 className="text-lg font-black text-slate-800">AI 대화 요약 분석</h5>
         </div>
         <button className="text-slate-400 hover:text-slate-600 transition-colors" onClick={onClose}>
-          <X size={24} /> {/* lucide-react X 아이콘 사용 권장 */}
+          <X size={24} />
         </button>
       </div>
 
       <div className="p-6">
-        <div className="relative min-h-[300px] max-h-[500px] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-slate-50 p-6 text-base leading-relaxed text-slate-700 shadow-inner border border-slate-100">
-          {loading ? (
-            <div className="flex h-full items-center justify-center py-20 text-slate-400 font-bold animate-pulse">
-              대화 내용을 분석하여 요약 중입니다...
-            </div>
-          ) : (
-            summary || '최근 나눈 대화가 없어 요약할 내용이 없습니다.'
-          )}
+        <div className="relative min-h-[300px] max-h-[500px] overflow-y-auto whitespace-pre-wrap rounded-2xl bg-slate-50 p-8 text-[15px] leading-relaxed text-slate-700 shadow-inner border border-slate-100">
+          {summary ? formatSummary(summary) : '요약된 내용이 없습니다.'}
         </div>
-        <p className="mt-4 text-center text-xs font-bold text-slate-400 uppercase tracking-tighter">
-          Powered by Gemini AI Analysis
+        <p className="mt-4 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest">
+          AI-Generated Content Analysis
         </p>
       </div>
 

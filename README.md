@@ -4,7 +4,7 @@
 
 **SimFreeChat**은 **NestJS, Socket.io, React** 기반의 실시간 멀티미디어 채팅 서비스입니다.  
 웹소켓 기반의 저지연 **텍스트 및 이미지(원본/썸네일)** 송수신을 지원합니다.  
-**Gemini AI**를 연동하여 누적된 대화의 **핵심 내용을 요약**해 주는 기능을 제공합니다.  
+**LLM(Gemini)**을 연동하여 누적된 대화의 **핵심 내용을 요약**해 주는 기능을 제공합니다.  
 **Redis**을 통해 세션과 유저 상태, 메시지 등을 캐싱하여 DB 부하를 최소화했습니다.  
 
 * **진행 기간**: 2025.09.02 ~ 현재 (지속 업데이트 중)
@@ -62,7 +62,7 @@
 | **NestJS** | 모듈화된 아키텍처 기반의 확장성 있는 서버 로직 구현 |
 | **Socket.io** | 실시간 양방향 메시지 통신 처리 |
 | **React** | Component 기반 UI 설계 및 상태 관리 최적화 |
-| **Gemini API** | 대화 맥락 파악 및 실시간 요약 기능 |
+| **LLM(Gemini)** | LLM 기반 자연어 처리를 통한 대화 맥락 파악 및 실시간 요약 기능 구현 |
 | **Redis** | 빠른 속도를 위한 데이터 캐싱, 세션 상태 관리 및 DB Write-Back 버퍼링 |
 | **MySQL(AWS RDS)** | 영구적 데이터 저장 용도 |
 | **AWS EC2** | 클라우드 가상 서버 호스팅을 통한 서비스 인프라 운영 |
@@ -114,10 +114,11 @@
 
 ## ⚡ 성능 개선 및 문제 해결
 
-- [**이슈 #1: 대용량 메시지 로그 DB 조회 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/1)
-- [**이슈 #2: 트래픽 부하 테스트를 통해 쓰기 성능 200배 개선, 조회 부하 90% 절감**](https://github.com/dohun03/SimFreeChat/issues/2)
-- [**이슈 #3: 이미지 이중 저장 구조(Thumbnail/Origin) 도입을 통한 네트워크 트래픽 최적화**](https://github.com/dohun03/SimFreeChat/issues/3)
+- [**이슈 #5: LLM 기반 AI 채팅 요약 시스템의 문제점 해결 및 비용 최적화**](https://github.com/dohun03/SimFreeChat/issues/5)
 - [**이슈 #4: AWS 인프라 환경에서 트래픽 부하 테스트를 통해 단계별 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/4)
+- [**이슈 #3: 이미지 이중 저장 구조(Thumbnail/Origin) 도입을 통한 네트워크 트래픽 최적화**](https://github.com/dohun03/SimFreeChat/issues/3)
+- [**이슈 #2: 트래픽 부하 테스트를 통해 쓰기 성능 200배 개선, 조회 부하 90% 절감**](https://github.com/dohun03/SimFreeChat/issues/2)
+- [**이슈 #1: 대용량 메시지 로그 DB 조회 성능 최적화**](https://github.com/dohun03/SimFreeChat/issues/1)
 
 ---
 
@@ -181,5 +182,5 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ## 📝 추가 구현하고 싶은 기능들
 - [ ] 음성 채팅 기능 (WebRTC)
 - [x] 이미지 파일 전송 및 썸네일 생성 기능
-- [x] AI를 이용한 대화 요약 기능
+- [x] LLM을 이용한 대화 요약 및 맥락 분석 기능
 - [ ] 이메일 인증 기반 비밀번호 찾기

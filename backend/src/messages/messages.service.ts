@@ -10,6 +10,7 @@ import { RedisService } from 'src/redis/redis.service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GetAllMessageLogsQueryDto } from './dto/get-all-message-logs-query.dto';
 import { GetRoomMessagesDto } from './dto/get-room-messages.dto';
+import { RoomSummary } from './room-summary.entity';
 
 @Injectable()
 export class MessagesService {
@@ -22,6 +23,8 @@ export class MessagesService {
     private readonly messageRepository: Repository<Message>,
     @InjectRepository(MessageLog)
     private readonly messageLogRepository: Repository<MessageLog>,
+    @InjectRepository(RoomSummary)
+    private readonly roomSummaryRepository: Repository<RoomSummary>,
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(User)
@@ -45,6 +48,30 @@ export class MessagesService {
     const seqStr = this.sequence.toString().padStart(3, '0');
     
     return `${now}${workerId}${seqStr}`;
+  }
+
+  // AI 요약용 메시지 포맷 메서드
+  private formatMessagesForAi(messages: ResponseMessageDto[]): string {
+    return messages
+      .filter(msg => !msg.isDeleted && msg.type === 'text')
+      .map(msg => {
+        // 단순 자음/모음 반복 및 과도한 공백 제거
+        const cleanContent = msg.content
+          .replace(/[ㄱ-ㅎㅏ-ㅣ]{1,}/g, '')
+          .replace(/[^a-zA-Z0-9가-힣\s]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        // 메시지당 50자 제한
+        const truncated = cleanContent.length > 50 
+          ? cleanContent.substring(0, 50) + '...' 
+          : cleanContent;
+
+        return `${msg.user.name}: ${truncated}`;
+      })
+      .filter(filterMsg => filterMsg.split(': ')[1].length > 0)
+      .slice(-100) // 최근 100개로 제한하여 컨텍스트 최적화
+      .join('\n');
   }
 
   async createMessage(
@@ -305,48 +332,112 @@ export class MessagesService {
   }
 
   async getAiMessagesSummary(roomId: number) {
-    const cachedMessages = await this.redisService.getRoomMessageCache(roomId);
-    if (!cachedMessages) return { summary: "내용 없음" };
-    if (cachedMessages.length < 20) return { summary: "대화가 부족하여 요약할 수 없습니다." };
+    // 기존 요약 및 최신 캐시 메시지 로드
+    const [lastSummary, cachedMessages] = await Promise.all([
+      this.roomSummaryRepository.findOne({ where: { roomId } }),
+      this.redisService.getRoomMessageCache(roomId),
+    ]);
 
-    // 데이터 포맷팅
-    const chatContext = cachedMessages
-      .filter(msg => !msg.isDeleted && msg.type === 'text')
-      .map(msg => `${msg.user.name}: ${msg.content}`)
-      .join('\n');
-      
+    if (!cachedMessages || cachedMessages.length < 30) {
+      return { summary: "요약할 대화 내용이 없습니다.", isUpdated: false };
+    }
+
+    // 신규 메시지 개수 계산
+    const latestId = cachedMessages[cachedMessages.length - 1].id;
+    const gapCount = lastSummary 
+      ? cachedMessages.filter(msg => msg.id > lastSummary.lastMessageId).length 
+      : cachedMessages.length;
+
+    // 업데이트가 불필요한 경우 (30개 미만)
+    if (lastSummary && gapCount < 30) {
+      return { summary: lastSummary.content, isUpdated: false };
+    }
+
+    const lockKey = `lock:summary:${roomId}`;
+    const hasLock = await this.redisService.getLock(lockKey, 30);
+    if (!hasLock) {
+      return { 
+        summary: lastSummary?.content || "다른 사용자가 대화를 요약 중입니다...", 
+        isUpdated: false 
+      };
+    }
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-    // 프롬프트 작성 (데이터 주입)
-    const prompt = `
-      다음은 실시간 채팅방의 대화 내용이다.
-      사용자들의 대화를 분석해서 다음 형식으로 요약해줘:
+    let prompt = "";
+    let summaryType = "";
+    const formatInstruction = `
+      출력 형식:
+      # 주제 요약 (한 줄 핵심)
+      # 주요 내용 (3~5개 불렛포인트)
+      # 분위기 및 키워드
       
-      1. 주제 요약 (한 줄로 핵심만)
-      2. 주요 대화 내용 (누가 어떤 말을 했는지 포함하여 3~5개 불렛포인트)
-      3. 전체적인 분위기 (예: 즐거움, 화남, 평온함 등 한 단어)
-      4. 핵심 키워드 (대화에서 가장 중요한 단어 3~5개를 선택해서 #키워드 형식으로 나열)
-
-      대화 내용:
-      ${chatContext}
+      ※ 주의: '결과입니다', '업데이트했습니다' 같은 불필요한 서두나 설명은 일절 배제하고 위 형식의 내용만 출력할 것.
     `;
+    
+    // 기존 요약 + 새 메시지 (30 ~ 100개 사이)
+    if (lastSummary && gapCount <= 100) {
+      summaryType = "MERGE_SUMMARY";
+      const newMessages = cachedMessages.filter(msg => msg.id > lastSummary.lastMessageId);
+      const context = this.formatMessagesForAi(newMessages);
+      if (!context) return { summary: lastSummary?.content, isUpdated: false };
+      
+      prompt = `
+        너는 전문 대화 요약가야.
+        [기존 요약]의 내용을 참고하여, 새로 추가된 [최근 대화] 내용을 반영해 전체 요약을 업데이트해줘.
+        기존의 흐름을 유지하면서 새로운 정보(결정사항, 바뀐 분위기 등)를 포함해야 해.
+        요약 내용 길이는 300자 내외로 해줘.
 
-    const startTime = Date.now();
+        [기존 요약]: ${lastSummary.content}
+        [최근 대화]: 
+        ${context}
+        
+        ${formatInstruction}
+      `;
+    } 
+    // 새로 요약 (101개 이상 또는 첫 요약)
+    else {
+      summaryType = "NEW_SUMMARY";
+      const context = this.formatMessagesForAi(cachedMessages);
+      if (!context) return { summary: lastSummary?.content, isUpdated: false };
+      
+      prompt = `
+        너는 전문 대화 요약가야. 
+        아래 [대화 내용]을 바탕으로 전체 내용을 요약해줘. 
+        이전 맥락은 무시하고 현재 주어진 대화의 핵심만 정확하게 추출해라.
+        요약 내용 길이는 300자 내외로 해줘.
+
+        [대화 내용]:
+        ${context}
+
+        ${formatInstruction}
+      `;
+    }
 
     try {
       const result = await model.generateContent(prompt);
-      const response = result.response;
-      const summaryText = response.text();
+      const summaryText = result.response.text();
 
-      const duration = Date.now() - startTime;
+      // DB 업데이트
+      await this.roomSummaryRepository.upsert({
+        roomId,
+        content: summaryText,
+        lastMessageId: latestId,
+      }, ['roomId']);
 
-      this.logger.log(`[AI_SUMMARY_SUCCESS] 방ID:${roomId} | 소요시간:${duration}ms`);
+      this.logger.log(`[AI_SUMMARY] 방ID: ${roomId} | 유형: ${summaryType} | Gap: ${gapCount}`);
+      
+      return { summary: summaryText, isUpdated: true };
 
-      return { summary: summaryText };
     } catch (err) {
-      this.logger.error(`[AI_SUMMARY_ERROR] 방ID:${roomId} | 사유:${err.message}`, err.stack);
-      return { summary: "AI 요약 중 오류가 발생했습니다." };
+      this.logger.error(`[AI_SUMMARY_FAILED] 방ID: ${roomId} | 사유: ${err.message}`);
+      return { 
+        summary: lastSummary?.content || "AI 요약 처리 중 오류가 발생했습니다.", 
+        isUpdated: false 
+      };
+    } finally {
+      await this.redisService.delLock(lockKey);
     }
   }
 

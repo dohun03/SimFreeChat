@@ -348,6 +348,10 @@ export class RedisService implements OnModuleInit {
     return result === 'OK';
   }
 
+  async delLock(key: string): Promise<void> {
+    await this.redis.del(key);
+  }
+
   // 메시지 배치 작업 (1분마다 실행)
   @Cron(CronExpression.EVERY_MINUTE)
   async handleBufferToDb() {

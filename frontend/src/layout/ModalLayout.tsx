@@ -19,7 +19,7 @@ export function ModalLayout({ children, onClose, maxWidth }: ModalLayoutProps) {
       />
       {/* 모달 박스 */}
       <div 
-        className={`relative w-full ${maxWidth ? maxWidth : 'max-w-md'} overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-modal-content`}
+        className={`relative w-full ${maxWidth ? maxWidth : 'max-w-md'} overflow-hidden rounded-[1rem] bg-white shadow-2xl animate-modal-content`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
