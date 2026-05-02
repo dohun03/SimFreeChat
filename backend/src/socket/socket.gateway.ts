@@ -201,57 +201,6 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     }
   }
 
-  @OnEvent('leaveAllRooms')
-  async handleLeaveAllRooms(payload: { userId: number, roomId: number, roomUserCount: number, roomUsers: any, deletedUser: any }) {
-    const { userId, roomId, roomUserCount, roomUsers, deletedUser } = payload;
-    
-    await this.removeUserSocket(roomId, deletedUser.id);
-    
-    this.server.to(roomId.toString()).emit('roomEvent', {
-      msg: `${deletedUser.name} 님이 퇴장했습니다.`,
-      roomUsers,
-      roomUserCount,
-    });
-  }
-
-  @OnEvent('updateRoom')
-  handleUpdateRoom(payload: { roomId: number, room: number }) {
-    const { roomId, room } = payload;
-
-    this.server.to(roomId.toString()).emit('roomUpdated', {
-      msg: '방 정보가 변경되었습니다.',
-      room,
-    });
-  }
-  
-  @OnEvent('deleteRoom')
-  handleDeleteRoom(payload: { roomId: number, userId: number }) {
-    const { roomId, userId } = payload;
-    this.removeUserSocket(roomId, userId);
-  }
-
-  @UseGuards(WsThrottlerGuard)
-  @Throttle({ chat_limit: { limit: 10, ttl: 10 } })
-  @SubscribeMessage('sendMessage')
-  async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
-    try {
-      const userId = client.data.user.id;
-      const dto = await this.validateDto(SendMessageDto, payload);
-      const message = await this.messagesService.createMessage(dto.roomId, userId, dto.content, dto.type);
-  
-      this.server.to(dto.roomId.toString()).emit('messageCreate', message);
-    } catch (err) {
-      if (err.status === 429 || err.name === 'ThrottlerException' || err.message.includes('Throttler')) {
-        client.emit('exception', { message: '너무 빠르게 메시지를 보내고 있습니다.' });
-        return;
-      }
-
-      this.logger.error(`[MESSAGE_SEND_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.user.id} | 사유:${err.message}`);
-
-      client.emit('exception', { message: err.message });
-    }
-  }
-
   @SubscribeMessage('deleteMessage')
   async handleDeleteMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
@@ -303,28 +252,109 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect, 
     }
   }
 
-  @SubscribeMessage('banUser')
-  async handleBanUser(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
+  @OnEvent('room.user.leftAll')
+  async handleLeaveAllRooms(payload: { 
+    roomId: number, 
+    roomUserCount: number, 
+    roomUsers: any, 
+    deletedUser: any
+  }) {
+    const { roomId, roomUserCount, roomUsers, deletedUser } = payload;
+    
+    await this.removeUserSocket(roomId, deletedUser.id);
+    
+    this.server.to(roomId.toString()).emit('roomEvent', {
+      msg: `${deletedUser.name} 님이 퇴장했습니다.`,
+      roomUsers,
+      roomUserCount,
+    });
+  }
+
+  @OnEvent('room.info.update')
+  handleUpdateRoom(payload: { roomId: number, room: any }) {
+    const { roomId, room } = payload;
+
+    this.server.to(roomId.toString()).emit('roomUpdated', {
+      msg: '방 정보가 변경되었습니다.',
+      room,
+    });
+  }
+  
+  @OnEvent('room.delete')
+  handleDeleteRoom(payload: { roomId: number, userId: number }) {
+    const { roomId, userId } = payload;
+    this.removeUserSocket(roomId, userId);
+  }
+
+  @UseGuards(WsThrottlerGuard)
+  @Throttle({ chat_limit: { limit: 10, ttl: 10 } })
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: any) {
     try {
-      const dto = await this.validateDto(BanUserDto, payload);
-      const owner = client.data.user;
+      const userId = client.data.user.id;
+      const dto = await this.validateDto(SendMessageDto, payload);
+      const message = await this.messagesService.createMessage(dto.roomId, userId, dto.content, dto.type);
+  
+      this.server.to(dto.roomId.toString()).emit('messageCreate', message);
+    } catch (err) {
+      if (err.status === 429 || err.name === 'ThrottlerException' || err.message.includes('Throttler')) {
+        client.emit('exception', { message: '너무 빠르게 메시지를 보내고 있습니다.' });
+        return;
+      }
 
-      await this.roomUsersService.banUserById(dto.roomId, dto.userId, owner.id, dto.banReason);
-      await this.removeUserSocket(dto.roomId, dto.userId);
+      this.logger.error(`[MESSAGE_SEND_ERROR] 방ID:${payload?.roomId} | 유저ID:${client.data.user.id} | 사유:${err.message}`);
 
+      client.emit('exception', { message: err.message });
+    }
+  }
+
+  @OnEvent('room.user.restricted')
+  async handleUserRestricted(payload: { 
+    roomId: number, 
+    targetUserId: number, 
+    status: string, 
+    reason: string, 
+    until: Date 
+  }) {
+    const { roomId, targetUserId, status, reason, until } = payload;
+
+    if (status === 'banned') {
+      await this.removeUserSocket(roomId, targetUserId);
+      
       const [roomUsers, roomUserCount] = await Promise.all([
-        this.socketService.getRoomUsersSummary(dto.roomId),
-        this.redisService.getRoomUserCount(dto.roomId)
+        this.socketService.getRoomUsersSummary(roomId),
+        this.redisService.getRoomUserCount(roomId),
       ]);
 
-      this.server.to(dto.roomId.toString()).emit('roomEvent', {
-        msg: `사용자를 밴 처리했습니다.`,
+      this.server.to(roomId.toString()).emit('roomEvent', {
+        msg: `한 사용자가 관리자에 의해 차단되었습니다.`,
         roomUsers,
         roomUserCount,
       });
-    } catch (err) {
-      this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${payload?.roomId} | 대상ID:${payload?.userId} | 사유:${err.message}`, err.stack);
-      throw new WsException(err.message);
+    } else if (status === 'muted') {
+      const socketMap = await this.redisService.getUserSockets(targetUserId);
+      for (const [sId, rId] of Object.entries(socketMap)) {
+        if (Number(rId) === roomId) {
+          this.server.to(sId).emit('muted', { 
+            msg: `관리자에 의해 뮤트되었습니다.`, 
+            reason, 
+            until 
+          });
+        }
+      }
+    }
+  }
+
+  @OnEvent('room.user.unrestricted')
+  async handleUserUnrestricted(payload: { roomId: number, targetUserId: number }) {
+    const { roomId, targetUserId } = payload;
+
+    // 해당 유저에게 제재가 풀렸음을 알림
+    const socketMap = await this.redisService.getUserSockets(targetUserId);
+    for (const [sId, rId] of Object.entries(socketMap)) {
+      if (Number(rId) === roomId) {
+        this.server.to(sId).emit('unrestricted', { msg: '제재가 해제되었습니다. 다시 채팅이 가능합니다.' });
+      }
     }
   }
 }

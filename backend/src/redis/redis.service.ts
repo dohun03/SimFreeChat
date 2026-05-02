@@ -2,11 +2,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BadRequestException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
-import { Message } from 'src/messages/messages.entity';
-import { MessageLog } from 'src/messages/message-logs.entity';
+import { Message } from 'src/messages/entities/messages.entity';
+import { MessageLog } from 'src/messages/entities/message-logs.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from 'src/users/users.entity';
+import { User } from 'src/users/entities/users.entity';
 
 @Injectable()
 export class RedisService implements OnModuleInit {

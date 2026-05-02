@@ -2,7 +2,6 @@ import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query,
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomsService } from './rooms.service';
-import { SocketService } from 'src/socket/socket.service';
 import { SessionGuard } from 'src/auth/guards/session.guard';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { ResponseRoomDto } from './dto/response-room.dto';
@@ -13,7 +12,6 @@ import { ResponseRoomDto } from './dto/response-room.dto';
 export class RoomsController {
   constructor(
     private readonly roomsService: RoomsService,
-    private readonly socketService: SocketService
   ) {}
 
   // 방 생성
@@ -44,7 +42,6 @@ export class RoomsController {
     @Req() req: any
   ): Promise<ResponseRoomDto> {
     const room = await this.roomsService.updateRoom(roomId, req.user.id, updateRoomDto);
-    this.socketService.updateRoom(roomId, room);
 
     return room;
   }

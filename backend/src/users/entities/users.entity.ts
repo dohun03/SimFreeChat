@@ -1,7 +1,7 @@
-import { RoomUser } from 'src/room-users/room-user.entity';
+import { RoomUser } from 'src/room-users/entities/room-users.entity';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 
-@Entity()
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;

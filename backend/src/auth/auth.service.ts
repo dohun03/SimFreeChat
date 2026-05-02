@@ -4,7 +4,7 @@ import { SocketService } from 'src/socket/socket.service';
 import { RedisService } from 'src/redis/redis.service';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
-import { User } from 'src/users/users.entity';
+import { User } from 'src/users/entities/users.entity';
 import { Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 

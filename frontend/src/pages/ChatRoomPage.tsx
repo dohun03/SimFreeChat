@@ -9,15 +9,25 @@ import { MessageInput } from '../components/chat/MessageInput';
 import { MessageSearchList } from '../components/chat/MessageSearchList';
 import { UserInfoModal } from '../modals/UserInfoModal';
 import { ImageModal } from '../modals/ImageModal';
-import { ShieldAlert, Sparkles, LogOut, ChevronDown, Users, Ban, Circle, Settings, X  } from 'lucide-react';
-import { RoomBanManagerModal } from '../modals/RoomBanManagerModal';
+import { 
+  ShieldAlert, Sparkles, LogOut, Circle, Settings, X, 
+  Users, Search, ShieldCheck, MessageSquare 
+} from 'lucide-react';
+import { RoomManagementModal } from '../modals/RoomManagementModal';
 import { RoomEditModal } from '../modals/RoomEditModal';
 import { SummaryModal } from '../modals/SummaryModal';
+import { RoomUserManagement } from '../components/chat/RoomUserManagement';
+import { RoomUserList } from '../components/RoomUserList';
+
+// 사이드바 탭 타입 정의
+type TabType = 'users' | 'search' | 'settings' | 'management';
 
 export function ChatRoomPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  
+  // 기존 상태들 유지
   const [room, setRoom] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [showBanModal, setShowBanModal] = useState(false);
@@ -31,23 +41,30 @@ export function ChatRoomPage() {
   const [serverLastId, setServerLastId] = useState(0);
   const [jumpTargetId, setJumpTargetId] = useState<number | null>(null);
   const [errorReason, setErrorReason] = useState<{ title: string; desc: string } | null>(null);
+
+  // 레이아웃 전용 상태 추가
+  const [activeTab, setActiveTab] = useState<TabType>('users');
+  const [selectedManagementUser, setSelectedManagementUser] = useState<any>(null);
+
   const { messages, setMessages, roomUsers, typingUsers, actions } = useSocket(
     roomId, 
     room,
     user?.id
   );
 
+  const { sendMessage, sendImage, sendTyping, deleteMessage, kickUser, banUser } = actions;
+  const isOwner = room?.owner?.id === user?.id;
+
+  // [기존 로직] 초기 데이터 및 밴 체크
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
     
-    // 계정 밴 여부 체크
     if (user.bannedUntil) {
       const bannedUntil = new Date(user.bannedUntil);
-      const now = new Date();
-      if (bannedUntil > now) {
+      if (bannedUntil > new Date()) {
         setErrorReason({
           title: "계정 이용 정지",
           desc: `관리자에 의해 이용이 정지되었습니다. 사유: ${user.banReason}`
@@ -59,34 +76,9 @@ export function ChatRoomPage() {
     const fetchRoomData = async () => {
       try {
         const data = await apiGet(`/api/rooms/${roomId}`);
-        
-        // 방별 밴 여부 체크
-        const bannedList = await apiGet(`/api/room-users/${roomId}`);
-        const myBanInfo = bannedList.find((b: any) => b.user.id === user.id);
-        if (myBanInfo) {
-          setErrorReason({
-            title: "입장 제한",
-            desc: `이 대화방에서 차단(Ban)되어 입장하실 수 없습니다.  사유: ${myBanInfo.banReason}`
-          });
-          return;
-        }
-
-        // 인원 초과 체크
-        if (data.currentMembers >= data.maxMembers && data.owner.id !== user.id) {
-          setErrorReason({
-            title: "정원 초과",
-            desc: "방 인원이 가득 차서 더 이상 입장할 수 없습니다."
-          });
-          return;
-        }
-
         setRoom(data);
       } catch (err) {
-        setErrorReason({
-          title: "에러 발생",
-          desc: `사유: ${err}`
-        });
-        return;
+        setErrorReason({ title: "에러 발생", desc: `사유: ${err}` });
       }
     };
 
@@ -94,12 +86,10 @@ export function ChatRoomPage() {
   }, [roomId, user, navigate]);
 
   const loadingRef = useRef(false);
-
-  // 메시지 DOM 참조용
   const messagesRef = useRef(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // 서버 메시지 마지막 ID 동기화
+  // [기존 로직] 서버 메시지 마지막 ID 동기화
   useEffect(() => {
     if (messages.length > 0) {
       const lastId = Number(messages[messages.length - 1].id);
@@ -107,11 +97,11 @@ export function ChatRoomPage() {
     }
   }, [messages]);
 
+  // [기존 로직] 메시지 로드 (Pagination)
   const loadMessages = useCallback(async (direction: 'init' | 'before' | 'recent' = 'init') => {
     if (loadingRef.current || !roomId) return;
-
     const currentMsgs = messagesRef.current;
-    const firstId = messagesRef.current[0]?.id;
+    const firstId = currentMsgs[0]?.id;
     const lastId = currentMsgs[currentMsgs.length - 1]?.id;
 
     let url = `/api/messages/${roomId}`;
@@ -119,20 +109,15 @@ export function ChatRoomPage() {
     else if (direction === 'recent' && lastId) url += `?direction=recent&cursor=${lastId}`;
 
     try {
-      loadingRef.current = true; // 플래그 먼저 세우기
+      loadingRef.current = true;
       setLoading(true);
-
       const msgs = await apiGet<any[]>(url);
-      
       if (msgs && msgs.length > 0) {
-        if (direction === 'init' || direction === 'recent') {
-          setServerLastId(Number(msgs[msgs.length - 1].id));
-        }
-
+        if (direction === 'init' || direction === 'recent') setServerLastId(Number(msgs[msgs.length - 1].id));
         setMessages(prev => {
           if (direction === 'before') return [...msgs, ...prev];
           if (direction === 'recent') return [...prev, ...msgs].slice(-200);
-          return msgs; // init
+          return msgs;
         });
       }
     } catch (err) {
@@ -141,35 +126,26 @@ export function ChatRoomPage() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [roomId, serverLastId]);
+  }, [roomId]);
 
   useEffect(() => {
-    if (user && roomId && room) {
-      loadMessages('init');
-    }
-  }, [roomId, !!user, !!room]);
+    if (user && roomId && room) loadMessages('init');
+  }, [roomId, !!user, !!room, loadMessages]);
 
+  // [기존 로직] 검색 메시지 위치 점프
   const loadSearchedMessageAround = useCallback(async (targetId: number) => {
     if (loadingRef.current || !roomId) return;
-
     try {
       loadingRef.current = true;
       setLoading(true);
-      
       setMessages([]); 
-
       const msgs = await apiGet<any[]>(`/api/messages/${roomId}/context?targetId=${targetId}`);
-      
       if (msgs && msgs.length > 0) {
         const uniqueMap = new Map();
         msgs.forEach(m => uniqueMap.set(m.id, m));
         const cleanMsgs = Array.from(uniqueMap.values()).sort((a, b) => a.id - b.id);
-
         setMessages(cleanMsgs);
-
-        setTimeout(() => {
-          setJumpTargetId(targetId);
-        }, 50);
+        setTimeout(() => setJumpTargetId(targetId), 50);
       }
     } catch (err) {
       console.error("Jump Error:", err);
@@ -177,183 +153,170 @@ export function ChatRoomPage() {
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [roomId]);
+  }, [roomId, setMessages]);
 
-  // 에러 화면
-  if (errorReason) {
-    return (
-      <div className="flex h-full w-full flex-col items-center justify-center bg-slate-50 p-6 text-center">
-        <div className="mb-6 rounded-full bg-rose-100 p-5 text-rose-600">
-          <ShieldAlert size={48} />
-        </div>
-        <h1 className="mb-2 text-2xl font-black text-slate-900">{errorReason.title}</h1>
-        <p className="mb-8 text-slate-500 font-medium">{errorReason.desc}</p>
-        <button 
-          onClick={() => navigate('/')}
-          className="rounded-xl bg-slate-900 px-8 py-3 font-black text-white shadow-lg hover:bg-slate-800 transition-all active:scale-95"
-        >
-          메인으로 돌아가기
-        </button>
-      </div>
-    );
-  }
-
-  // 로딩 뷰
-  if (!room || !user) {
-    return <div className="p-6 text-slate-400 font-bold uppercase tracking-widest animate-pulse">Loading Room...</div>;
-  }
-
-  const { sendMessage, sendImage, sendTyping, deleteMessage, kickUser, banUser } = actions;
-  const isOwner = room.owner.id === user.id;
-
+  // [기존 로직] AI 요약 요청
   const handleRequestSummary = async () => {
     if (summaryStatus === 'loading') return;
-
     setSummaryStatus('loading');
-    setShowToast(true); // 즉시 "분석 중" 토스트 표시
-
+    setShowToast(true);
     try {
       const data = await apiGet<{ summary: string }>(`/api/messages/${roomId}/summary`);
       setCachedSummary(data?.summary || '');
-      setSummaryStatus('done'); // 분석 완료 상태로 변경 (토스트 UI가 바뀜)
+      setSummaryStatus('done');
     } catch (err) {
-      console.error(err);
       setSummaryStatus('idle');
       setShowToast(false);
-      alert('AI 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+      alert('AI 서버 응답이 지연되고 있습니다.');
     }
   };
 
+  if (errorReason) return <ErrorView reason={errorReason} onBack={() => navigate('/')} />;
+  if (!room || !user) return <div className="p-6 font-black animate-pulse">LOADING...</div>;
+
   return (
-    <div className="flex h-full w-full bg-white text-slate-900 overflow-hidden">
-      {/* 왼쪽 사이드바: 유저 목록 */}
-      <aside className="flex w-1/5 flex-col border-r bg-white p-6">
-        <div className="flex-1 overflow-y-auto">
-          <UserList 
-            users={roomUsers} 
-            ownerId={room.owner.id} 
-            currentUserId={user.id} 
-            isOwner={isOwner} 
-            onUserClick={setSelectedUserId}
-            onKick={kickUser}
-            onBan={(userId: number) => {
-              const reason = prompt('밴 사유를 입력하세요') || '사유 없음';
-              banUser(userId, reason);
-            }}
-          />
+    <div className="flex h-full w-full bg-white text-slate-900 overflow-hidden font-sans">
+      
+      {/* 좌측, 탭 콘텐츠 영역 */}
+      <aside className="flex w-[25%] min-w-[340px] flex-col border-r border-slate-200 bg-white">
+        <header className="h-[72px] flex items-center px-6 border-b border-slate-100">
+          <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">
+            {activeTab === 'users' && '참여자 목록'}
+            {activeTab === 'search' && '메시지 검색'}
+            {activeTab === 'settings' && '방 설정'}
+            {activeTab === 'management' && '권한 / 상태 관리'}
+          </h2>
+        </header>
+
+        {/* 탭 본문 내용 */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {activeTab === 'users' && (
+            <div className="p-4">
+              <UserList 
+                users={roomUsers} 
+                ownerId={room.owner.id} 
+                currentUserId={user.id} 
+                isOwner={isOwner} 
+                onUserClick={setSelectedUserId}
+                onKick={kickUser}
+                onBan={(userId: number) => {
+                  const reason = prompt('밴 사유를 입력하세요') || '사유 없음';
+                  banUser(userId, reason);
+                }}
+              />
+            </div>
+          )}
+          {activeTab === 'search' && (
+            <div className="p-4">
+              <MessageSearchList 
+                roomId={room.id} 
+                onMessageClick={(msgId: number) => loadSearchedMessageAround(msgId)} 
+              />
+            </div>
+          )}
+          {activeTab === 'settings' && (
+            <div className="p-6 flex flex-col items-center justify-center h-full text-center">
+              <Settings size={48} className="text-slate-200 mb-4" />
+              <p className="text-slate-400 font-bold mb-4">방 정보를 수정하시겠습니까?</p>
+              <button 
+                onClick={() => setShowEditModal(true)}
+                className="rounded-xl bg-slate-900 px-6 py-3 font-black text-white hover:bg-slate-800 transition-all"
+              >
+                설정 모달 열기
+              </button>
+            </div>
+          )}
+          {/* {activeTab === 'management' ? (
+            selectedManagementUser ? (
+              <RoomUserManagement 
+                roomId={Number(roomId)} 
+                user={selectedManagementUser} 
+                onBack={() => setSelectedManagementUser(null)} 
+              />
+            ) : (
+              <RoomUserList 
+                roomId={Number(roomId)} 
+                onSelectUser={(u) => setSelectedManagementUser(u)} 
+              />
+            )
+          ) : null} */}
         </div>
+
+        {/* 하단 탭 내비게이션 */}
+        <nav className="h-[84px] border-t border-slate-100 bg-slate-50 flex items-center justify-around px-4">
+          <TabNavBtn active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={<Users size={20} />} label="Users" />
+          <TabNavBtn active={activeTab === 'search'} onClick={() => setActiveTab('search')} icon={<Search size={20} />} label="Search" />
+          <TabNavBtn active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={20} />} label="Settings" />
+          {isOwner && (
+            <TabNavBtn 
+              active={activeTab === 'management'} 
+              onClick={() => { setActiveTab('management'); setSelectedManagementUser(null); }} 
+              icon={<ShieldCheck size={20} />} 
+              label="Admin" 
+              color="rose" 
+            />
+          )}
+        </nav>
       </aside>
 
-      {/* 메인 섹션: 채팅창 */}
-      <main className="relative flex flex-1 flex-col border-r border-slate-300 bg-white">
-        <header className="relative z-20 flex h-[72px] shrink-0 items-center border-b border-slate-300 px-4 md:px-8 shadow-sm bg-white">
-          {/* 왼쪽: 제목 영역*/}
-          <div className="flex h-full w-1/2 items-center min-w-0 pr-4">
-            <div className="flex flex-col min-w-0 w-full">
-              <div className="flex items-center gap-1.5 w-full">
-                <h1 className="truncate text-[18px] md:text-[19px] font-bold tracking-tight text-slate-900">
-                  # {room.name}
-                </h1>
-              </div>
-              
-              <div className="flex items-center gap-2 mt-0.5 text-slate-500 overflow-hidden">
-                <div className="flex shrink-0 items-center gap-1 text-[12px] md:text-[13px] font-semibold">
-                  <Users size={14} strokeWidth={2.5} />
-                  <span>{roomUsers.length}</span>
-                </div>
-                <span className="h-1 w-1 shrink-0 rounded-full bg-slate-200"></span>
-                <div className="flex shrink-0 items-center gap-1 text-[12px] md:text-[13px] font-semibold text-emerald-500">
-                  <Circle size={7} fill="currentColor" stroke="none" />
-                  <span className="hidden sm:inline">Online</span>
-                </div>
-              </div>
+      {/* 우측, 채팅창 영역 */}
+      <main className="relative flex flex-1 flex-col bg-white overflow-hidden">
+        
+        {/* 헤더 */}
+        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-200 px-8 shadow-sm z-20 bg-white">
+          <div className="flex flex-col">
+            <h1 className="text-[19px] font-black text-slate-900 tracking-tight"># {room.name}</h1>
+            <div className="flex items-center gap-2 mt-0.5 font-bold">
+              <Circle size={7} fill="#10b981" className="text-emerald-500" />
+              <span className="text-[12px] text-slate-400 uppercase tracking-wider">{roomUsers.length} MEMBERS ACTIVE</span>
             </div>
           </div>
 
-          {/* 오른쪽: 버튼 영역 */}
-          <div className="flex h-full w-1/2 items-center justify-end gap-1.5 md:gap-2 min-w-0">
-            
-            {/* 1. AI 요약 */}
+          <div className="flex items-center gap-3">
             <button 
               onClick={handleRequestSummary}
               disabled={summaryStatus === 'loading'}
-              className="group flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white p-2 xl:px-3.5 xl:py-1.5 text-[13px] font-bold text-slate-700 hover:border-purple-200 hover:bg-purple-50 transition-all shadow-sm shrink disabled:opacity-50"
+              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-[13px] font-black text-slate-700 hover:bg-purple-50 hover:border-purple-200 transition-all disabled:opacity-50"
             >
-              <Sparkles size={16} className={`shrink-0 ${summaryStatus === 'loading' ? 'animate-pulse' : 'text-purple-500'}`} />
-              <span className="hidden xl:inline whitespace-nowrap">
-                {summaryStatus === 'loading' ? '분석 요청됨' : 'AI 요약'}
-              </span>
+              <Sparkles size={16} className={summaryStatus === 'loading' ? 'animate-spin' : 'text-purple-500'} />
+              AI SUMMARY
             </button>
-
-            {isOwner && (
-              <>
-                {/* 2. 방 설정 */}
-                <button 
-                  onClick={() => setShowEditModal(true)} // navigate 대신 상태 변경
-                  className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white p-2 xl:px-3.5 xl:py-1.5 text-[13px] font-bold text-slate-700 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm shrink"
-                >
-                  <Settings size={16} className="shrink-0 text-blue-500" />
-                  <span className="hidden xl:inline whitespace-nowrap">Settings</span>
-                </button>
-
-                {/* 3. 밴 관리 */}
-                <button 
-                  onClick={() => setShowBanModal(true)} // navigate 대신 상태 변경
-                  className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white p-2 xl:px-3.5 xl:py-1.5 text-[13px] font-bold text-slate-700 hover:border-rose-200 hover:bg-rose-50 transition-all shadow-sm shrink"
-                >
-                  <Ban size={16} className="shrink-0 text-rose-500" />
-                  <span className="hidden xl:inline whitespace-nowrap">Bans</span>
-                </button>
-              </>
-            )}
-
-            <div className="mx-0.5 h-4 w-[1px] bg-slate-100 shrink-0"></div>
-
-            {/* 4. 나가기 버튼 (항상 아이콘) */}
             <button 
               onClick={() => navigate('/')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all shadow-sm"
-              title="Exit Room"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 transition-all shadow-sm"
             >
-              <LogOut size={16} />
+              <LogOut size={18} />
             </button>
           </div>
         </header>
 
+        {/* AI 요약 알림 */}
         {showToast && (
-          <div className={`absolute top-[72px] left-0 right-0 z-10 flex h-12 w-full items-center justify-between px-6 
-            transition-all duration-300 border-b shadow-md backdrop-blur-md
-            ${summaryStatus === 'loading' 
-              ? 'bg-white/95 border-slate-200' 
-              : 'bg-purple-50/95 border-purple-100'
-            } animate-in slide-in-from-top`}>
+          <div className="absolute top-16 left-0 right-0 z-30 flex h-14 w-full items-center justify-between px-6 bg-blue-50/95 border-b border-blue-100 backdrop-blur-md animate-in slide-in-from-top">
             
-            <div className="flex items-center gap-3 overflow-hidden">
-              {summaryStatus === 'loading' ? (
-                <Circle size={14} className="animate-spin text-purple-400 shrink-0" />
-              ) : (
-                <Sparkles size={14} className="text-purple-600 shrink-0" fill="currentColor" />
-              )}
-              
-              <span className="text-[13px] font-bold text-slate-700 truncate">
-                {summaryStatus === 'loading' 
-                  ? "대화 흐름을 파악하여 요약본을 구성하고 있습니다." 
-                  : "요약이 준비되었습니다. 지금 바로 확인해 보세요."}
+            {/* 왼쪽: 상태 아이콘 + 메시지 */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm border border-blue-100">
+                <Sparkles size={16} className={summaryStatus === 'loading' ? 'animate-spin text-blue-400' : 'text-blue-500'} />
+              </div>
+              <span className="text-[13px] font-bold text-blue-900">
+                {summaryStatus === 'loading' ? "대화 내용을 분석하고 있습니다..." : "대화 요약이 준비되었습니다."}
               </span>
             </div>
 
-            <div className="flex shrink-0 items-center gap-4 ml-4">
+            {/* 오른쪽: 버튼 그룹 */}
+            <div className="flex items-center gap-4">
               {summaryStatus === 'done' && (
                 <button 
-                  onClick={() => { setShowSummaryModal(true); }}
-                  className="text-[13px] font-black text-purple-600 hover:text-purple-800 underline underline-offset-4"
+                  onClick={() => setShowSummaryModal(true)} 
+                  className="text-[13px] font-black text-blue-600 hover:text-blue-700 underline underline-offset-4"
                 >
-                  결과 보기
+                  VIEW SUMMARY
                 </button>
               )}
               <button 
-                onClick={() => { setShowToast(false); setSummaryStatus('idle'); }}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                onClick={() => { setShowToast(false); setSummaryStatus('idle'); }} 
+                className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <X size={18} />
               </button>
@@ -361,82 +324,57 @@ export function ChatRoomPage() {
           </div>
         )}
 
-        {/* 메시지 리스트 영역 */}
-        <div className="relative z-0 flex-1 overflow-hidden">
+        {/* 메시지 리스트 */}
+        <div className="flex-1 relative overflow-hidden bg-slate-50/30">
           <MessageList 
-            messages={messages} 
-            currentUserId={user.id} 
-            roomId={room.id} 
-            serverLastId={serverLastId}
-            onLoadBefore={() => loadMessages('before')}
-            onLoadRecent={() => loadMessages('recent')}
-            onDelete={deleteMessage}
-            onUserClick={setSelectedUserId}
-            onImageClick={setSelectedImageUrl}
-            jumpTargetId={jumpTargetId}
-            onJumpComplete={() => setJumpTargetId(null)}
+            messages={messages} currentUserId={user.id} roomId={room.id} serverLastId={serverLastId}
+            onLoadBefore={() => loadMessages('before')} onLoadRecent={() => loadMessages('recent')}
+            onDelete={deleteMessage} onUserClick={setSelectedUserId} onImageClick={setSelectedImageUrl}
+            jumpTargetId={jumpTargetId} onJumpComplete={() => setJumpTargetId(null)}
           />
         </div>
 
-        {/* 메시지 입력 영역 */}
-        <footer className="relative z-20 p-5 border-t border-slate-300 bg-white">
-          <MessageInput 
-            roomId={room.id} 
-            onSendText={sendMessage} 
-            onSendImage={sendImage} 
-            onTyping={sendTyping}
-          />
+        {/* 입력 푸터 */}
+        <footer className="p-6 border-t border-slate-200 bg-white">
+          <MessageInput roomId={room.id} onSendText={sendMessage} onSendImage={sendImage} onTyping={sendTyping} />
         </footer>
       </main>
 
-      {/* 오른쪽 사이드바: 검색 */}
-      <aside className="flex w-1/4 flex-col bg-white p-6">
-        {/* 6. 검색 리스트에 클릭 핸들러 전달 (컴포넌트 내부에서 구현되어야 함) */}
-        <MessageSearchList 
-          roomId={room.id} 
-          onMessageClick={(msgId: number) => loadSearchedMessageAround(msgId)} 
-        />
-      </aside>
+      {/* [모달 모음 - 기존 유지] */}
+      {showBanModal && <RoomManagementModal roomId={Number(roomId)} roomName={room.name} onClose={() => setShowBanModal(false)} />}
+      {showEditModal && <RoomEditModal roomId={Number(roomId)} onClose={() => setShowEditModal(false)} />}
+      {showSummaryModal && <SummaryModal isOpen={showSummaryModal} onClose={() => setShowSummaryModal(false)} summary={cachedSummary} />}
+      <UserInfoModal userId={selectedUserId} isOpen={!!selectedUserId} onClose={() => setSelectedUserId(null)} isOwner={isOwner} currentUserId={user.id} onKick={kickUser} onBan={banUser} />
+      <ImageModal imageUrl={selectedImageUrl} isOpen={!!selectedImageUrl} onClose={() => setSelectedImageUrl(null)} />
+    </div>
+  );
+}
 
-      {/* 모달창들 */}
-      {showBanModal && (
-        <RoomBanManagerModal 
-          roomId={Number(roomId)} 
-          roomName={room.name} 
-          onClose={() => setShowBanModal(false)} 
-        />
-      )}
+// 하단 내비게이션 버튼 컴포넌트
+function TabNavBtn({ active, onClick, icon, label, color = 'indigo' }: any) {
+  const activeStyles = active 
+    ? `bg-white text-${color === 'rose' ? 'rose' : 'indigo'}-600 shadow-sm border-slate-200` 
+    : `text-slate-400 hover:text-slate-600 border-transparent`;
+  
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2.5 mx-1 rounded-2xl border transition-all ${activeStyles}`}
+    >
+      <div className={active ? 'scale-110 transition-transform' : ''}>{icon}</div>
+      <span className="text-[10px] font-black uppercase tracking-tight">{label}</span>
+    </button>
+  );
+}
 
-      {showEditModal && (
-        <RoomEditModal 
-          roomId={Number(roomId)} 
-          onClose={() => setShowEditModal(false)} 
-        />
-      )}
-
-      {showSummaryModal && (
-        <SummaryModal 
-          isOpen={showSummaryModal} 
-          onClose={() => setShowSummaryModal(false)} 
-          summary={cachedSummary}
-        />
-      )}
-      
-      <UserInfoModal 
-        userId={selectedUserId} 
-        isOpen={!!selectedUserId} 
-        onClose={() => setSelectedUserId(null)} 
-        isOwner={isOwner} 
-        currentUserId={user.id} 
-        onKick={kickUser} 
-        onBan={banUser}
-      />
-      
-      <ImageModal 
-        imageUrl={selectedImageUrl} 
-        isOpen={!!selectedImageUrl} 
-        onClose={() => setSelectedImageUrl(null)} 
-      />
+// 에러 뷰 서브 컴포넌트
+function ErrorView({ reason, onBack }: any) {
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-50 p-6 text-center">
+      <div className="mb-6 rounded-3xl bg-rose-100 p-6 text-rose-600 shadow-inner"><ShieldAlert size={64} /></div>
+      <h1 className="mb-2 text-3xl font-black text-slate-900 uppercase tracking-tighter">{reason.title}</h1>
+      <p className="mb-8 text-slate-500 font-bold">{reason.desc}</p>
+      <button onClick={onBack} className="rounded-2xl bg-slate-900 px-10 py-4 font-black text-white shadow-2xl hover:bg-slate-800 active:scale-95 transition-all">BACK TO MAIN</button>
     </div>
   );
 }

@@ -3,9 +3,9 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { RedisService } from './redis.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Message } from 'src/messages/messages.entity';
-import { MessageLog } from 'src/messages/message-logs.entity';
-import { User } from 'src/users/users.entity';
+import { Message } from 'src/messages/entities/messages.entity';
+import { MessageLog } from 'src/messages/entities/message-logs.entity';
+import { User } from 'src/users/entities/users.entity';
 
 @Global()
 @Module({

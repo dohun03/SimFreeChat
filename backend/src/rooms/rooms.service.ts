@@ -4,10 +4,10 @@ import { RedisService } from 'src/redis/redis.service';
 import { LessThan, Like, Repository } from 'typeorm';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
-import { Room } from './rooms.entity';
+import { Room } from './entities/rooms.entity';
 import * as bcrypt from 'bcrypt';
 import { ResponseRoomDto } from './dto/response-room.dto';
-import { User } from 'src/users/users.entity';
+import { User } from 'src/users/entities/users.entity';
 import { SocketEvents } from 'src/socket/socket.events';
 import path from 'path';
 import * as fs from 'fs';
@@ -72,6 +72,11 @@ export class RoomsService {
   
       const updatedRoom = await this.roomRepository.save(room);
   
+      this.socketEvents.updateRoom({
+        roomId: roomId,
+        room: updatedRoom
+      });
+
       return {
         ...updatedRoom,
         password: !!updatedRoom.password,
@@ -102,7 +107,10 @@ export class RoomsService {
             roomUsersArray.map(async (uidStr) => {
               const uid = Number(uidStr);
 
-              this.socketEvents.deleteRoom(roomId, uid);
+              this.socketEvents.deleteRoom({
+                roomId,
+                userId: uid,
+              });
               await this.redisService.delUserRoomRelation(roomId, uid);
             })
           );

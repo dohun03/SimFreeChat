@@ -1,13 +1,13 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, Index, JoinColumn, PrimaryColumn } from 'typeorm';
-import { Room } from '../rooms/rooms.entity';
-import { User } from '../users/users.entity';
+import { Room } from '../../rooms/entities/rooms.entity';
+import { User } from '../../users/entities/users.entity';
 
 export enum MessageType {
   TEXT = 'text',
   IMAGE = 'image',
 }
 
-@Entity()
+@Entity('messages')
 @Index('idx_master_room', ['room', 'id'])
 @Index('idx_fulltext_content', ['content'], { fulltext: true, parser: 'ngram' })
 export class Message {

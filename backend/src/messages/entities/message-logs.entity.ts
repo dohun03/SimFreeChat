@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 import { MessageType } from './messages.entity';
 
-@Entity('message_log')
+@Entity('message_logs')
 
 @Index('idx_default', ['createdAt', 'id'])
 @Index('idx_master_room', ['roomId', 'createdAt', 'id'])

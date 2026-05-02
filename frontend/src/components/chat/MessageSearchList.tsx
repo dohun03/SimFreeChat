@@ -78,7 +78,6 @@ export function MessageSearchList({
     <div className="flex flex-col h-full bg-white">
       {/* 상단 타이틀 및 검색창 */}
       <div className="px-1 mb-4">
-        <h3 className="text-lg font-black text-slate-800 mb-4 px-1 tracking-tight">메시지 검색</h3>
         <form onSubmit={handleSearch} className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
           <input

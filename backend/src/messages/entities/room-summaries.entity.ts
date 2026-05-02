@@ -1,5 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
-import { Room } from 'src/rooms/rooms.entity';
+import { Room } from 'src/rooms/entities/rooms.entity';
 
 @Entity('room_summaries')
 export class RoomSummary {

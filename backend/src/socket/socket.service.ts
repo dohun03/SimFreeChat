@@ -1,12 +1,12 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Room } from 'src/rooms/rooms.entity';
-import { User } from 'src/users/users.entity';
+import { Room } from 'src/rooms/entities/rooms.entity';
+import { User } from 'src/users/entities/users.entity';
 import { In, Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { SocketEvents } from './socket.events';
 import * as bcrypt from 'bcrypt';
-import { RoomUser } from 'src/room-users/room-user.entity';
+import { RoomUser, RoomUserRole, RoomUserStatus } from 'src/room-users/entities/room-users.entity';
 import { JoinRoomResult, KickUserResult, LeaveRoomResult } from './types/socket.types';
 
 @Injectable()
@@ -37,34 +37,65 @@ export class SocketService {
     return users.filter(user => !!user);
   }
 
-  // room 정보도 추후에 Redis로 저장
   async joinRoom(roomId: number, userId: number, password?: string): Promise<JoinRoomResult> {
+    // 1. 방 존재 여부 확인
     const room = await this.roomRepository.findOne({
       where: { id: roomId },
       relations: ['owner'],
     });
     if (!room) throw new BadRequestException('존재하지 않는 방입니다.');
 
+    // 2. 인원 제한 체크 (Redis)
     const beforeCount = await this.redisService.getRoomUserCount(roomId);
     if (beforeCount>=room.maxMembers) throw new BadRequestException('방의 인원이 가득 찼습니다.');
-    
-    if (room.password && room.owner.id!=userId) {
-      const isPasswordValid = password ? await bcrypt.compare(password, room.password) : false;
-      if (!isPasswordValid) throw new BadRequestException('비밀번호가 일치하지 않습니다.');
-    }
     
     const joinUser = await this.redisService.getUserProfile(userId);
     if (!joinUser) throw new UnauthorizedException('사용자가 존재하지 않습니다.');
     if (joinUser.bannedUntil && joinUser.bannedUntil > new Date()) throw new UnauthorizedException(`이용이 정지된 계정입니다. 사유:  ${joinUser.banReason}`);
 
-    const bannedUser = await this.roomUserRepository.findOne({
-      where: {
+    // 3. 비밀번호 체크 (관리자, 방장 제외)
+    const isOwner = room.owner.id === userId;
+    const isAdmin = joinUser.isAdmin;
+
+    if (room.password && !isOwner && !isAdmin) {
+      const isPasswordValid = password ? await bcrypt.compare(password, room.password) : false;
+      if (!isPasswordValid) throw new BadRequestException('비밀번호가 일치하지 않습니다.');
+    }
+
+    // 4. DB에서 방별 유저 상태/권한 조회
+    let roomUser = await this.roomUserRepository.findOne({
+      where: { room: { id: roomId }, user: { id: userId } },
+    });
+
+    const now = new Date();
+
+    // 5. 밴 여부 체크
+    if (roomUser) {
+      if (roomUser.status === RoomUserStatus.BANNED) {
+        if (roomUser.restrictedUntil && roomUser.restrictedUntil > now) {
+          const isPermanent = roomUser.restrictedUntil.getFullYear() === 9999;
+          const msg = isPermanent ? '영구 제한' : `${roomUser.restrictedUntil.toLocaleString()}까지 제한`;
+          
+          throw new ForbiddenException(`이 방에서 밴 처리된 사용자입니다. 사유: ${roomUser.banReason} (${msg})`);
+        }
+
+        roomUser.status = RoomUserStatus.NORMAL;
+        roomUser.restrictedUntil = null;
+        await this.roomUserRepository.save(roomUser);
+      }
+    } else {
+      // 6. 방에 처음 입장시 DB 생성
+      const isOwner = room.owner.id === userId;
+      roomUser = this.roomUserRepository.create({
         room: { id: roomId },
         user: { id: userId },
-      },
-    });
-    if (bannedUser?.isBanned) throw new BadRequestException(`이 방에서 밴 처리된 사용자입니다: ${bannedUser.banReason}`);
+        role: isOwner ? RoomUserRole.OWNER : RoomUserRole.MEMBER,
+        status: RoomUserStatus.NORMAL,
+      });
+      await this.roomUserRepository.save(roomUser);
+    }
     
+    // 7. Redis 실시간 접속 정보 반영
     await this.redisService.addRoomUser(roomId, userId);
     await this.redisService.addUserRoom(userId, roomId);
 
@@ -117,17 +148,18 @@ export class SocketService {
           this.redisService.getRoomUserCount(roomId)
         ]);
 
-        this.socketEvents.leaveAllRooms(roomId, roomUserCount, roomUsers, leaveUser);
+        this.socketEvents.leaveAllRooms({
+          roomId, 
+          roomUserCount, 
+          roomUsers, 
+          deletedUser: leaveUser
+        });
       }
     }
 
     await this.redisService.delSessionByUserId(userId);
 
     this.logger.log(`ROOM_LEAVE_ALL [SUCCESS] 유저ID:${userId}`);
-  }
-
-  async updateRoom(roomId: number, room: any): Promise<void> {
-    this.socketEvents.updateRoom(roomId, room);
   }
 
   async kickUser(roomId: number, targetUserId: number, owner: any): Promise<KickUserResult> {

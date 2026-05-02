@@ -1,16 +1,16 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Room } from 'src/rooms/rooms.entity';
-import { User } from 'src/users/users.entity';
+import { Room } from 'src/rooms/entities/rooms.entity';
+import { User } from 'src/users/entities/users.entity';
 import { Repository, DataSource, Like } from 'typeorm';
 import { ResponseMessageDto } from './dto/response-message.dto';
-import { MessageLog } from './message-logs.entity';
-import { Message, MessageType } from './messages.entity';
+import { MessageLog } from './entities/message-logs.entity';
+import { Message, MessageType } from './entities/messages.entity';
 import { RedisService } from 'src/redis/redis.service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GetAllMessageLogsQueryDto } from './dto/get-all-message-logs-query.dto';
 import { GetRoomMessagesDto } from './dto/get-room-messages.dto';
-import { RoomSummary } from './room-summary.entity';
+import { RoomSummary } from './entities/room-summaries.entity';
 
 @Injectable()
 export class MessagesService {

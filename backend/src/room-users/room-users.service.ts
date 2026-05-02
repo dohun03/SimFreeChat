@@ -1,91 +1,127 @@
 import { BadRequestException, ForbiddenException, Injectable, InternalServerErrorException, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RedisService } from 'src/redis/redis.service';
-import { Room } from 'src/rooms/rooms.entity';
+import { Room } from 'src/rooms/entities/rooms.entity';
 import { Repository } from 'typeorm';
-import { RoomUser } from './room-user.entity';
+import { RoomUser, RoomUserStatus, RoomUserRole } from './entities/room-users.entity';
+import { RestrictUserDto } from './dto/restric-user.dto';
+import { SocketEvents } from 'src/socket/socket.events';
 
 @Injectable()
 export class RoomUsersService {
   private readonly logger = new Logger(RoomUsersService.name);
   constructor(
     private readonly redisService: RedisService,
+    private readonly socketEvents: SocketEvents,
     @InjectRepository(Room)
     private readonly roomRepository: Repository<Room>,
     @InjectRepository(RoomUser)
     private readonly roomUserRepository: Repository<RoomUser>,
   ) {}
 
-  async banUserById(roomId: number, targetUserId: number, ownerId: number, banReason: string): Promise<void> {
-    const [room, roomUser] = await Promise.all([
-      this.roomRepository.findOne({
-        where: { id: roomId },
-        relations: ['owner'],
-      }),
-      this.roomUserRepository.findOne({
-        where: { room: { id: roomId }, user: { id: targetUserId } },
-      }),
-    ]);
+  // [핵심] 권한 설정 (Manager 부여/해제)
+  async updateRole(roomId: number, targetUserId: number, ownerId: number, role: RoomUserRole): Promise<void> {
+    const room = await this.roomRepository.findOne({ where: { id: roomId }, relations: ['owner'] });
+    if (!room || room.owner.id !== ownerId) throw new ForbiddenException('방장만 매니저를 임명할 수 있습니다.');
+    if (targetUserId === ownerId) throw new BadRequestException('본인의 권한은 변경할 수 없습니다.');
 
-    // 권한 및 상태 체크
-    if (!room || room.owner.id !== ownerId) throw new ForbiddenException('방장 권한이 없습니다.');
-    if (room.owner.id === targetUserId) throw new BadRequestException('방장을 밴 처리할 수 없습니다.');
-    if (roomUser?.isBanned) throw new BadRequestException('이미 밴 상태인 유저입니다.');
+    await this.roomUserRepository.upsert(
+      { room: { id: roomId }, user: { id: targetUserId }, role: role },
+      ['room', 'user']
+    );
+  }
+
+  async restrictUser(roomId: number, targetUserId: number, dto: any, adminId: number) {
+    const { status, days, reason } = dto;
+
+    // 권한 조회
+    const adminProfile = await this.redisService.getUserProfile(adminId);
+    const adminInRoom = await this.roomUserRepository.findOne({
+      where: { room: { id: roomId }, user: { id: adminId } }
+    });
+
+    // 권한 체크
+    const hasAuthority = adminProfile.isAdmin || 
+      (adminInRoom?.role === RoomUserRole.OWNER || adminInRoom?.role === RoomUserRole.MANAGER);
+
+    if (!hasAuthority) {
+      throw new ForbiddenException('제재 권한이 없습니다.');
+    }
+
+    if (targetUserId === adminId) {
+      throw new BadRequestException('자기 자신은 제재할 수 없습니다.');
+    }
+
+    // 타겟 유저 조회
+    const target = await this.roomUserRepository.findOne({ 
+      where: { room: { id: roomId }, user: { id: targetUserId } } 
+    });
+
+    if (!target) throw new NotFoundException('해당 방에 유저가 존재하지 않습니다.');
+
+    if (target.role !== RoomUserRole.MEMBER) {
+      throw new ForbiddenException('관리자는 제재할 수 없습니다.');
+    }
+
+    // 4. 날짜 계산
+    const restrictedUntil = days >= 9999 
+      ? new Date('9999-12-31T23:59:59') 
+      : new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    // 5. DB 반영
+    await this.roomUserRepository.update(target.id, {
+      status,
+      restrictedUntil,
+      banReason: reason,
+    });
+
+    // 6. 소켓 알림
+    this.socketEvents.restrictUser({
+      roomId,
+      targetUserId,
+      status,
+      reason,
+      until: restrictedUntil,
+    });
+
+    return { success: true, status, until: restrictedUntil };
+  }
+
+  async unrestrictUser(roomId: number, targetUserId: number, adminId: number) {
+    // 관리자 권한 체크 로직 (위와 동일하게 수행 권장)
+    const admin = await this.roomUserRepository.findOne({ where: { room: { id: roomId }, user: { id: adminId } } });
+    if (!admin || admin.role === RoomUserRole.MEMBER) throw new ForbiddenException('권한이 없습니다.');
+
+    const target = await this.roomUserRepository.findOne({ where: { room: { id: roomId }, user: { id: targetUserId } } });
+    if (!target) throw new NotFoundException('유저를 찾을 수 없습니다.');
+
+    // 제재 필드 초기화
+    await this.roomUserRepository.update(target.id, {
+      status: RoomUserStatus.NORMAL,
+      restrictedUntil: null,
+      banReason: null,
+    });
+
+    // 해제 소켓 전파
+    this.socketEvents.unrestrictUser({
+      roomId,
+      targetUserId
+    });
     
-    // 작업 시작
-    await this.roomUserRepository.manager.transaction(async (transaction) => {
-      try {
-        const targetUser = roomUser || this.roomUserRepository.create({
-          room: { id: roomId },
-          user: { id: targetUserId },
-        });
-        targetUser.isBanned = true;
-        targetUser.banReason = banReason;
-
-        await transaction.save(targetUser);
-        await this.redisService.delUserRoomRelation(roomId, targetUserId);
-        
-        this.logger.log(`[ROOM_USER_BAN_SUCCESS] 방ID:${roomId} | 대상ID:${targetUserId}`);
-
-      } catch (err) {
-        this.logger.error(`[ROOM_USER_BAN_ERROR] 방ID:${roomId} | 대상ID:${targetUserId} | 사유:${err.message}`, err.stack);
-        throw new InternalServerErrorException('밴 처리 중 오류가 발생했습니다.');
-      }
-    });
+    return { success: true, message: '제재가 해제되었습니다.' };
   }
 
-  async unBanUserById(roomId: number, targetUserId: number, ownerId: number): Promise<boolean> {
-    const room = await this.roomRepository.findOne({
-      where: {
-        id: roomId,
-        owner: { id: ownerId },
-      },
-    });
-    if (!room) throw new NotFoundException('방을 찾을 수 없습니다.');
-
-    const result = await this.roomUserRepository.delete({
-      room: { id: roomId },
-      user: { id: targetUserId },
-      isBanned: true,
-    });
-    if (result.affected === 0) throw new BadRequestException('해당 유저가 존재하지 않습니다.');
-
-    this.logger.log(`[ROOM_USER_UNBAN_SUCCESS] 방ID:${roomId} | 방장ID:${ownerId} | 대상ID:${targetUserId}`);
-
-    return true;
-  }
-
-  getBannedUsersByRoomId(roomId: number): Promise<RoomUser[]> {
-    return this.roomUserRepository
+  async getRoomUsers(roomId: number): Promise<RoomUser[]> {
+  return this.roomUserRepository
     .createQueryBuilder('roomUser')
     .leftJoinAndSelect('roomUser.user', 'user')
     .where('roomUser.room = :roomId', { roomId })
-    .andWhere('roomUser.isBanned = true')
     .select([
       'roomUser.id',
-      'roomUser.isBanned',
+      'roomUser.role',
+      'roomUser.status',
       'roomUser.banReason',
-      'roomUser.createdAt',
+      'roomUser.restrictedUntil',
       'user.id',
       'user.name'
     ])

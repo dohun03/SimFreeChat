@@ -24,7 +24,6 @@ export function UserList({ users, ownerId, currentUserId, onUserClick }: UserLis
     <div className="flex flex-col h-full bg-white">
       {/* 1. 상단 타이틀 및 블루 테마 검색창 */}
       <div className="px-1 mb-4">
-        <h3 className="text-lg font-black text-slate-800 mb-4 px-1 tracking-tight">참여자 목록</h3>
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
           <input
