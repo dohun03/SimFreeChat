@@ -7,10 +7,9 @@
 **LLM(Gemini)**을 연동하여 누적된 대화의 **핵심 내용을 요약**해 주는 기능을 제공합니다.  
 **Redis**을 통해 세션과 유저 상태, 메시지 등을 캐싱하여 DB 부하를 최소화했습니다.  
 
-* **진행 기간**: 2025.09.02 ~ 현재 (지속 업데이트 중)
+* **진행 기간**: 2025.09 ~ 2026.03
 * **참여 인원**: 1명 (개인 프로젝트)
 * **배포 환경**: AWS EC2, AWS RDS, Docker, Nginx, GitHub Actions
-* **데모 사이트**: [https://simfreechat.com](https://simfreechat.com)
 
 ---
 
@@ -91,9 +90,8 @@
 
 ## 📖 API 명세서 (Swagger)
 
-본 프로젝트는 **Swagger**를 통해 모든 엔드포인트를 문서화했습니다.
-
-* **Swagger UI:** [https://simfreechat.com/api/docs](https://simfreechat.com/api/docs)
+본 프로젝트는 **Swagger**를 통해 모든 엔드포인트를 문서화했습니다.  
+*(Docker 로컬 환경 실행 시 `http://localhost:{PORT}/api/docs` 경로에서 확인하실 수 있습니다.)*
 
 | 엔드포인트 (Endpoint) | 핵심 기능 (Core Logic) |
 | :--- | :--- |
